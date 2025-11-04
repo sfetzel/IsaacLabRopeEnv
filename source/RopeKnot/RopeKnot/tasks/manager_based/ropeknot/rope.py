@@ -10,8 +10,8 @@ class RopeFactory:
     """
 
     def __init__(self, rope_length, position=(0.0, 0.0, 0.0)):
-        self.linkHalfLength = 0.01  # smaller value makes it smoother
-        self.linkRadius = 0.005
+        self.linkHalfLength = 0.05  # smaller value makes it smoother
+        self.linkRadius = 0.48 * self.linkHalfLength
         self.ropeLength = rope_length
         self.ropeSpacing = 1.50
         self.coneAngleLimit = 110
@@ -105,13 +105,13 @@ class RopeFactory:
         z = self.capsuleZ + self.linkRadius
         angle = 0.0
         final_angle = 2 * (np.random.uniform() - 0.5) * 3.14 / 2
-        angles = np.linspace(0, final_angle, numLinks + 1)
+        angles = np.linspace(0, final_angle, numLinks)
         for _ in range(2):
             mean = np.random.uniform()
             std = np.random.uniform(0.5, 0.8)
-            angles *= 1 + np.exp(
-                -((np.linspace(0, 1, numLinks + 1) - mean) ** 2) / std**2
-            )
+            angles *= 1 + np.exp(-((np.linspace(0, 1, numLinks) - mean) ** 2) / std**2)
+
+        # angles = angles * 0.0
         x_values = np.cumsum(linkLength * np.cos(angles))
         y_values = np.cumsum(linkLength * np.sin(angles))
 
@@ -188,5 +188,5 @@ class RopeFactory:
 
 
 # stage = omni.usd.get_context().get_stage()
-# dem = RopeFactory()
-# print(dem.create(stage, 1))
+# dem = RopeFactory(1.0)
+# print(dem.create("/World/Rope", stage))

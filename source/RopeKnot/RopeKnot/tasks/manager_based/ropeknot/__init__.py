@@ -13,7 +13,7 @@ from . import agents
 
 
 gym.register(
-    id="Template-Ropeknot-v0",
+    id="STUBA-Ropeknot-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
