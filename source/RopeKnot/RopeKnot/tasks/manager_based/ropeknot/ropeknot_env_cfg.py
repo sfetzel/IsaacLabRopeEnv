@@ -56,15 +56,17 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
         spawn=sim_utils.DomeLightCfg(intensity=3000.0, color=(0.75, 0.75, 0.75)),
     )
 
-    # rigid object
-    object: AssetBaseCfg = AssetBaseCfg(
-        prim_path="/World/envs/env_.*/Rope",
-        spawn=RopeSpawnerCfg(),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.5, 0.0)),
-    )
-
     # articulation
     robot: ArticulationCfg = UR10e_ROBOTIQ_CFG.copy()
+
+    # rigid object
+    rope: RigidObjectCfg = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Rope",
+        spawn=RopeSpawnerCfg(
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.5, 0.0)),
+    )
 
 
 ##
@@ -194,12 +196,23 @@ class TerminationsCfg:
 ##
 
 
+from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 @configclass
 class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: RopeknotSceneCfg = RopeknotSceneCfg(
         num_envs=32, env_spacing=2.0, replicate_physics=False
     )
+    cube_properties = RigidBodyPropertiesCfg(
+        solver_position_iteration_count=16,
+        solver_velocity_iteration_count=1,
+        max_angular_velocity=1000.0,
+        max_linear_velocity=1000.0,
+        max_depenetration_velocity=5.0,
+        disable_gravity=False,
+    )
+    cube_scale = (3.0, 3.0, 3.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
@@ -219,6 +232,15 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1 / 120
         print(self.events)
+        # Set each stacking cube deterministically
+        self.scene.cube_1 = RigidObjectCfg(
+            prim_path="{ENV_REGEX_NS}/Cube_1",
+            init_state=RigidObjectCfg.InitialStateCfg(pos=[0.4, 0.0, 0.0203], rot=[1, 0, 0, 0]),
+            spawn=UsdFileCfg(
+                usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/blue_block.usd",
+                scale=self.cube_scale,
+            ),
+        )
         self.sim.render_interval = self.decimation
         self.teleop_devices = DevicesCfg(
             devices={

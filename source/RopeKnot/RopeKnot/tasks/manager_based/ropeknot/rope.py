@@ -87,7 +87,7 @@ class RopeFactory:
         linkLength = 2.0 * self.linkHalfLength - self.linkRadius
         numLinks = int(self.ropeLength / linkLength)
 
-        scopePath = prim_path.AppendChild(f"Rope")
+        scopePath = prim_path
         base = UsdGeom.Xform.Define(stage, scopePath)
         base.AddTranslateOp().Set(value=self.position)
 
