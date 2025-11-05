@@ -54,7 +54,7 @@ def spawn_multi_asset(
         factory.linkRadius = cfg.linkRadius
 
         factory.create(prim_path, stage)
-        # apply collision properties
+        """# apply collision properties
         if cfg.collision_props is not None:
             schemas.define_collision_properties(prim_path, cfg.collision_props)
 
@@ -64,7 +64,7 @@ def spawn_multi_asset(
             schemas.define_mass_properties(prim_path, cfg.mass_props)
         # apply rigid body properties
         if cfg.rigid_props is not None:
-            schemas.define_rigid_body_properties(prim_path, cfg.rigid_props)
+            schemas.define_rigid_body_properties(prim_path, cfg.rigid_props)"""
     # set carb setting to indicate Isaac Lab's environments that different prims have been spawned
     # at varying prim paths. In this case, PhysX parser shouldn't optimize the stage parsing.
     # the flag is mainly used to inform the user that they should disable `InteractiveScene.replicate_physics`
@@ -78,8 +78,8 @@ def spawn_multi_asset(
 @configclass
 class RopeSpawnerCfg(RigidObjectSpawnerCfg):
     func = spawn_multi_asset
-    rope_damping = 5
+    rope_damping = 100
     rope_stiffness = 50
     coneAngleLimit = 50
-    linkHalfLength = 0.03
-    linkRadius = 0.5 * 0.03
+    linkHalfLength = 0.05
+    linkRadius = 0.5 * 0.05

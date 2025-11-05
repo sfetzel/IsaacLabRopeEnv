@@ -30,8 +30,8 @@ class RopeFactory:
         material = UsdPhysics.MaterialAPI.Apply(
             stage.GetPrimAtPath(physicsMaterialPath)
         )
-        material.CreateStaticFrictionAttr().Set(0.01)
-        material.CreateDynamicFrictionAttr().Set(0.05)
+        material.CreateStaticFrictionAttr().Set(0.5)
+        material.CreateDynamicFrictionAttr().Set(0.5)
         material.CreateRestitutionAttr().Set(0)
 
         self.createRope(self._defaultPrimPath, stage, physicsMaterialPath)

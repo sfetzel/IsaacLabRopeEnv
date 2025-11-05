@@ -20,6 +20,7 @@ from .rope_spawner import RopeSpawnerCfg
 from isaaclab.assets import RigidObjectCfg
 from . import mdp
 from math import pi
+import os
 
 ##
 # Pre-defined configs
@@ -28,17 +29,68 @@ from math import pi
 from isaaclab_assets.robots.cartpole import CARTPOLE_CFG  # isort:skip
 from isaaclab_assets import UR10e_ROBOTIQ_GRIPPER_CFG  # isort:skip
 from isaaclab.sim.spawners.from_files import UsdFileCfg
+from isaaclab.actuators import ImplicitActuatorCfg
 
 ##
 # Scene definition
 ##
 
-UR10e_ROBOTIQ_CFG = UR10e_ROBOTIQ_GRIPPER_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
-UR10e_ROBOTIQ_CFG.init_state.joint_pos["shoulder_pan_joint"] = 0.0
-UR10e_ROBOTIQ_CFG.init_state.joint_pos["shoulder_lift_joint"] = -50.0 / 180.0 * pi
-UR10e_ROBOTIQ_CFG.init_state.joint_pos["elbow_joint"] = 50.0 / 180.0 * pi
-UR10e_ROBOTIQ_CFG.init_state.joint_pos["wrist_1_joint"] = -90.0 / 180.0 * pi
-UR10e_ROBOTIQ_CFG.init_state.joint_pos["wrist_2_joint"] = -90.0 / 180.0 * pi
+UR5e_ROBOTIQ_CFG = ArticulationCfg(
+    spawn=sim_utils.UsdFileCfg(
+        usd_path=f"{os.path.dirname(os.path.abspath(__file__))}/assets/ur5e_robotiq.usd",
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(
+            disable_gravity=True,
+            max_depenetration_velocity=5.0,
+        ),
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=False, solver_position_iteration_count=16, solver_velocity_iteration_count=1
+        ),
+        activate_contact_sensors=False,
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        joint_pos={
+            "shoulder_pan_joint": 0,
+            "shoulder_lift_joint": -50.0 / 180.0 * pi,
+            "elbow_joint": 50.0 / 180 * pi,
+            "wrist_1_joint": -90.0 / 180 * pi,
+            "wrist_2_joint": -90.0 / 180 * pi,
+            "wrist_3_joint": 0.0,
+        },
+        pos=(0.0, 0.0, 0.0),
+        rot=(1.0, 0.0, 0.0, 0.0),
+    ),
+    actuators={
+        # 'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint', 'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'
+        "shoulder": ImplicitActuatorCfg(
+            joint_names_expr=["shoulder_.*"],
+            stiffness=1320.0,
+            damping=72.6636085,
+            friction=0.0,
+            armature=0.0,
+        ),
+        "elbow": ImplicitActuatorCfg(
+            joint_names_expr=["elbow_joint"],
+            stiffness=600.0,
+            damping=34.64101615,
+            friction=0.0,
+            armature=0.0,
+        ),
+        "wrist": ImplicitActuatorCfg(
+            joint_names_expr=["wrist_.*"],
+            stiffness=216.0,
+            damping=29.39387691,
+            friction=0.0,
+            armature=0.0,
+        ),
+        "finger": ImplicitActuatorCfg(
+            joint_names_expr=["Slider_.*"],
+            stiffness=10.0,
+            damping=0.1,
+            friction=0.0,
+            armature=0.0,
+        )
+    },
+)
 
 
 @configclass
@@ -57,7 +109,7 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     )
 
     # articulation
-    robot: ArticulationCfg = UR10e_ROBOTIQ_CFG.copy()
+    robot: ArticulationCfg = UR5e_ROBOTIQ_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
     # rigid object
     rope: RigidObjectCfg = AssetBaseCfg(
@@ -65,7 +117,7 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
         spawn=RopeSpawnerCfg(
             collision_props=sim_utils.CollisionPropertiesCfg(),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.5, 0.0)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.5, 0.1)),
     )
 
 
@@ -103,13 +155,16 @@ class ActionsCfg:
     gripper_action = mdp.BinaryJointPositionActionCfg(
         asset_name="robot",
         joint_names=[
-            "finger_joint",
+            "Slider_1",
+            "Slider_2",
         ],
         open_command_expr={
-            "finger_joint": -pi / 4,
+            "Slider_1": 0.0,
+            "Slider_2": 0.0,
         },
         close_command_expr={
-            "finger_joint": pi / 4,
+            "Slider_1": -0.025,
+            "Slider_2": -0.025,
         },
     )
 
@@ -233,20 +288,20 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 1 / 120
         print(self.events)
         # Set each stacking cube deterministically
-        self.scene.cube_1 = RigidObjectCfg(
+        """self.scene.cube_1 = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/Cube_1",
             init_state=RigidObjectCfg.InitialStateCfg(pos=[0.4, 0.0, 0.0203], rot=[1, 0, 0, 0]),
             spawn=UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/blue_block.usd",
                 scale=self.cube_scale,
             ),
-        )
+        )"""
         self.sim.render_interval = self.decimation
         self.teleop_devices = DevicesCfg(
             devices={
                 "keyboard": Se3KeyboardCfg(
                     pos_sensitivity=0.02,
-                    rot_sensitivity=0.05,
+                    rot_sensitivity=0.5,
                     sim_device=self.sim.device,
                 ),
             }
