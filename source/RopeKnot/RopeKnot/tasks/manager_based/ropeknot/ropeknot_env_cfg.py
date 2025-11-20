@@ -20,6 +20,7 @@ from .rope_spawner import RopeSpawnerCfg
 from isaaclab.assets import RigidObjectCfg
 from . import mdp
 from math import pi
+import numpy as np
 import os
 
 ##
@@ -117,7 +118,7 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
         spawn=RopeSpawnerCfg(
             collision_props=sim_utils.CollisionPropertiesCfg(),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.5, 0.1)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.0, 0.1)),
     )
 
 
@@ -285,8 +286,9 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)
         # simulation settings
-        self.sim.dt = 1 / 120
-        print(self.events)
+        self.sim.dt = 1 / 240
+        np.random.seed(self.seed)
+        
         # Set each stacking cube deterministically
         """self.scene.cube_1 = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/Cube_1",

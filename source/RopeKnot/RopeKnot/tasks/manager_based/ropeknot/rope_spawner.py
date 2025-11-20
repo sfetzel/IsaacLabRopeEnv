@@ -46,7 +46,7 @@ def spawn_multi_asset(
 
     for index, prim_path in enumerate(prim_paths):
         # spawn single instance
-        factory = RopeFactory(1.0, translation)
+        factory = RopeFactory(cfg.rope_length, translation)
         factory.coneAngleLimit = cfg.coneAngleLimit
         factory.rope_stiffness = cfg.rope_stiffness
         factory.rope_damping = cfg.rope_damping
@@ -78,8 +78,9 @@ def spawn_multi_asset(
 @configclass
 class RopeSpawnerCfg(RigidObjectSpawnerCfg):
     func = spawn_multi_asset
-    rope_damping = 100
-    rope_stiffness = 50
-    coneAngleLimit = 50
-    linkHalfLength = 0.05
-    linkRadius = 0.5 * 0.05
+    rope_damping = 1e2
+    rope_stiffness = 1
+    coneAngleLimit = 60
+    rope_length = 0.3
+    linkHalfLength = 0.02
+    linkRadius = 0.5 * 0.02
