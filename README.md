@@ -36,6 +36,23 @@ The rope will be created using a spawner function. Its position will be slightly
         python scripts/teleop_se3_agent.py --task=STUBA-Ropeknot-v0
         ```
 
+    - Record via teleoperation:
+
+        ```bash
+        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
+        python scripts/record_demos.py --task=STUBA-Ropeknot-v0 --num_demos 1
+        ```
+        Press P to mark the demo as successful.
+
+
+    - Replay recorded demos:
+
+        ```bash
+        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
+        python scripts/replay_demos.py --task=STUBA-Ropeknot-v0 --dataset_file=datasets/test-dataset.hdf5
+        ```
+
+
     - Running a task:
 
         ```bash

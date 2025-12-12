@@ -5,9 +5,8 @@ import carb
 import isaacsim.core.utils.prims as prim_utils
 from isaacsim.core.utils.stage import get_current_stage
 import isaaclab.sim as sim_utils
-from isaaclab.sim import SpawnerCfg, RigidObjectSpawnerCfg
+from isaaclab.sim import RigidObjectSpawnerCfg
 from isaaclab.utils import configclass
-from isaaclab.sim import schemas
 
 
 def spawn_multi_asset(
@@ -54,17 +53,6 @@ def spawn_multi_asset(
         factory.linkRadius = cfg.linkRadius
 
         factory.create(prim_path, stage)
-        """# apply collision properties
-        if cfg.collision_props is not None:
-            schemas.define_collision_properties(prim_path, cfg.collision_props)
-
-        # note: we apply rigid properties in the end to later make the instanceable prim
-        # apply mass properties
-        if cfg.mass_props is not None:
-            schemas.define_mass_properties(prim_path, cfg.mass_props)
-        # apply rigid body properties
-        if cfg.rigid_props is not None:
-            schemas.define_rigid_body_properties(prim_path, cfg.rigid_props)"""
     # set carb setting to indicate Isaac Lab's environments that different prims have been spawned
     # at varying prim paths. In this case, PhysX parser shouldn't optimize the stage parsing.
     # the flag is mainly used to inform the user that they should disable `InteractiveScene.replicate_physics`
@@ -78,8 +66,8 @@ def spawn_multi_asset(
 @configclass
 class RopeSpawnerCfg(RigidObjectSpawnerCfg):
     func = spawn_multi_asset
-    rope_damping = 1.0
-    rope_stiffness = 1e-3
+    rope_damping = 1.5
+    rope_stiffness = 0.5
     coneAngleLimit = 160
     rope_length = 1.2
     linkHalfLength = 0.01

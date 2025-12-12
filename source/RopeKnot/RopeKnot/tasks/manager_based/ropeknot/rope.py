@@ -249,10 +249,9 @@ class RopeFactory:
 
 
 if __name__ == "__main__":
+    import omni
+
     stage = omni.usd.get_context().get_stage()
     dem = RopeFactory(1.2)
     dem.capsuleZ = 0.2
-    #dem.rope_damping = 5
-    #dem.rope_stiffness = 50
-    #dem.coneAngleLimit = 50
     print(dem.create("/World/Rope", stage))

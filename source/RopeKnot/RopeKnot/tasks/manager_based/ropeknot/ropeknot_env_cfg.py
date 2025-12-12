@@ -3,7 +3,6 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import math
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
@@ -26,10 +25,6 @@ import os
 ##
 # Pre-defined configs
 ##
-
-from isaaclab_assets.robots.cartpole import CARTPOLE_CFG  # isort:skip
-from isaaclab_assets import UR10e_ROBOTIQ_GRIPPER_CFG  # isort:skip
-from isaaclab.sim.spawners.from_files import UsdFileCfg
 from isaaclab.actuators import ImplicitActuatorCfg
 
 ##
@@ -44,7 +39,9 @@ UR5e_ROBOTIQ_CFG = ArticulationCfg(
             max_depenetration_velocity=5.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False, solver_position_iteration_count=16, solver_velocity_iteration_count=1
+            enabled_self_collisions=False,
+            solver_position_iteration_count=16,
+            solver_velocity_iteration_count=1,
         ),
         activate_contact_sensors=False,
     ),
@@ -89,7 +86,7 @@ UR5e_ROBOTIQ_CFG = ArticulationCfg(
             damping=0.1,
             friction=0.0,
             armature=0.0,
-        )
+        ),
     },
 )
 
@@ -132,7 +129,6 @@ from isaaclab.envs.mdp.actions.actions_cfg import DifferentialInverseKinematicsA
 from isaaclab.devices.device_base import DevicesCfg
 from isaaclab.devices.keyboard import Se3KeyboardCfg
 from isaaclab_tasks.manager_based.manipulation.stack.mdp.franka_stack_events import (
-    set_default_joint_pose,
     randomize_joint_by_gaussian_offset,
 )
 
@@ -253,7 +249,8 @@ class TerminationsCfg:
 
 
 from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+
+
 @configclass
 class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
@@ -292,7 +289,11 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
         # needed to for restoring the scene when replaying a recorded demo.
         for i in range(60):
             name = f"capsule_{i}"
-            setattr(self.scene, name, RigidObjectCfg(prim_path=f"/World/envs/env_0/Rope/{name}"))
+            setattr(
+                self.scene,
+                name,
+                RigidObjectCfg(prim_path=f"/World/envs/env_0/Rope/{name}"),
+            )
 
         self.sim.render_interval = self.decimation
         self.teleop_devices = DevicesCfg(
