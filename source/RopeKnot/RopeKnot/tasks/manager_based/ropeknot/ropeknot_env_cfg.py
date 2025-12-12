@@ -118,7 +118,7 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
         spawn=RopeSpawnerCfg(
             collision_props=sim_utils.CollisionPropertiesCfg(),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.5, 0.0, 0.1)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.6, 0.0, 0.1)),
     )
 
 

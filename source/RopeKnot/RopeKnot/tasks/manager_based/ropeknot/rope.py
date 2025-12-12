@@ -1,4 +1,4 @@
-from pxr import UsdGeom, Sdf, Gf, UsdPhysics, UsdShade, PhysxSchema
+from pxr import UsdGeom, Sdf, Gf, UsdPhysics, UsdShade, PhysxSchema, Usd
 from omni.physx.scripts import physicsUtils
 import numpy as np
 import isaacsim.core.utils.prims as prim_utils
@@ -7,47 +7,54 @@ import isaacsim.core.utils.prims as prim_utils
 class RopeFactory:
     """
     Adapted from Isaac Sim Rope demo.
+    Creates a rope using a series of rigid body capsules, connected by joints.
     """
 
-    def __init__(self, rope_length, position=(0.0, 0.0, 0.0), density: float = 800):
+    def __init__(self, rope_length, position=(0.0, 0.0, 0.0), density: float = 10):
         """
         density: float
             Density of the rope in kg/m³.
         """
-        self.linkHalfLength = 0.003  # smaller value makes it smoother
-        self.linkRadius = 0.5 * self.linkHalfLength  # 0.005
-        self.ropeLength = rope_length
+        self.linkHalfLength = 0.01  # half length of the cylinder of the capsules.
+        self.linkRadius = self.linkHalfLength  # radius of the halfspheres at the ends of the capsule and the cylinder.
+        self.ropeLength = rope_length  # length of the rope.
         # approximate volume as cylinder.
         self.volume = np.pi * self.linkRadius**2 * rope_length
         self.mass = self.volume * density
         self.numLinks = int(self.ropeLength / (2 * self.linkHalfLength))
         self.mass_per_element = self.mass / self.numLinks
-        self.ropeSpacing = 1.50
-        self.coneAngleLimit = 5
-        self.rope_damping = 0.04 #10.0
-        self.rope_stiffness = 0.05 # 1.0
+        self.coneAngleLimit = 160
+        self.rope_damping = 1.0 #10.0
+        self.rope_stiffness = 1e-6 # 1.0
         self.position = position
         self.contactOffset = 0.02 # 2.0
-        self.capsuleZ = 0.0
+        self.capsuleZ = self.linkRadius * 1.5
         self.filter_collisions = False
+        self.double_joints = False
 
     def create(self, prim_path: str, stage):
-        self._defaultPrimPath = Sdf.Path(prim_path)
+        temp_stage = Usd.Stage.CreateInMemory()
+        temp_prim_path = "/Rope"
 
-        physicsMaterialPath = self._defaultPrimPath.AppendChild("PhysicsMaterial")
-        UsdShade.Material.Define(stage, physicsMaterialPath)
-        material = UsdPhysics.MaterialAPI.Apply(
-            stage.GetPrimAtPath(physicsMaterialPath)
-        )
-        material.CreateStaticFrictionAttr().Set(0.2)
-        material.CreateDynamicFrictionAttr().Set(0.05)
-        material.CreateRestitutionAttr().Set(0)
+        with Usd.EditContext(temp_stage):
+            self._defaultPrimPath = Sdf.Path(temp_prim_path)
 
-        self.createRope(self._defaultPrimPath, stage, physicsMaterialPath)
+            physicsMaterialPath = self._defaultPrimPath.AppendChild("PhysicsMaterial")
+            UsdShade.Material.Define(temp_stage, physicsMaterialPath)
+            material = UsdPhysics.MaterialAPI.Apply(
+                temp_stage.GetPrimAtPath(physicsMaterialPath)
+            )
+            material.CreateStaticFrictionAttr().Set(0.05)
+            material.CreateDynamicFrictionAttr().Set(0.01)
+            material.CreateRestitutionAttr().Set(0)
+
+            self.createRope(self._defaultPrimPath, temp_stage, physicsMaterialPath)
+
+        Sdf.CopySpec(temp_stage.GetRootLayer(), temp_prim_path, stage.GetRootLayer(), prim_path)
 
     def createCapsule(self, path: Sdf.Path, stage, physicsMaterialPath: Sdf.Path):
         capsuleGeom = UsdGeom.Capsule.Define(stage, path)
-        capsuleGeom.CreateHeightAttr(self.linkHalfLength)
+        capsuleGeom.CreateHeightAttr(2 * self.linkHalfLength)
         capsuleGeom.CreateRadiusAttr(self.linkRadius)
         capsuleGeom.CreateAxisAttr("X")
 
@@ -56,15 +63,6 @@ class RopeFactory:
         #rigidBodyApi.CreateLinearDampingAttr(0.55)
         #rigidBodyApi.CreateAngularDampingAttr(0.55)
         physxSceneAPI = PhysxSchema.PhysxSceneAPI.Apply(capsuleGeom.GetPrim())
-
-        # force all actors in the scene to a fixed position and velocity iteration count
-        posIters = 150
-        velIters = 30
-        physxSceneAPI.CreateMaxPositionIterationCountAttr().Set(posIters)
-        physxSceneAPI.CreateMinPositionIterationCountAttr().Set(posIters)
-        physxSceneAPI.CreateMaxVelocityIterationCountAttr().Set(velIters)
-        physxSceneAPI.CreateMinVelocityIterationCountAttr().Set(velIters)
-        physxSceneAPI.CreateTimeStepsPerSecondAttr(300)
 
         massAPI = UsdPhysics.MassAPI.Apply(capsuleGeom.GetPrim())
         # massAPI.CreateDensityAttr().Set(1e-15)
@@ -79,8 +77,8 @@ class RopeFactory:
 
     def createJoint(self, jointPath: Sdf.Path, stage):
         joint = UsdPhysics.Joint.Define(stage, jointPath)
-        lower_limit = -0.05
-        upper_limit = 0.05
+        lower_limit = -0.02
+        upper_limit = 0.02
         # locked DOF (lock - low is greater than high)
         d6Prim = joint.GetPrim()
         limitAPI = UsdPhysics.LimitAPI.Apply(d6Prim, "transX")
@@ -99,19 +97,20 @@ class RopeFactory:
         # Moving DOF:
         dofs = ["rotY", "rotZ"]
         for d in dofs:
-            limitAPI = UsdPhysics.LimitAPI.Apply(d6Prim, d)
-            limitAPI.CreateLowAttr(-self.coneAngleLimit)
-            limitAPI.CreateHighAttr(self.coneAngleLimit)
+            if self.coneAngleLimit is not None:
+                limitAPI = UsdPhysics.LimitAPI.Apply(d6Prim, d)
+                limitAPI.CreateLowAttr(-self.coneAngleLimit)
+                limitAPI.CreateHighAttr(self.coneAngleLimit)
 
             # joint drives for rope dynamics:
             driveAPI = UsdPhysics.DriveAPI.Apply(d6Prim, d)
-            driveAPI.CreateTypeAttr("force")
+            driveAPI.CreateTypeAttr("acceleration") #force
             driveAPI.CreateDampingAttr(self.rope_damping)
             driveAPI.CreateStiffnessAttr(self.rope_stiffness)
         return joint
 
     def createRope(self, prim_path, stage, physicsMaterialPath: Sdf.Path):
-        linkLength = 2.0 * self.linkHalfLength - self.linkRadius
+        linkLength = 2.0 * self.linkHalfLength #- self.linkRadius
 
         scopePath = prim_path
         base = UsdGeom.Xform.Define(stage, scopePath)
@@ -126,7 +125,7 @@ class RopeFactory:
             std = np.random.uniform(0.5, 0.8)
             angles *= 1 + np.exp(-((np.linspace(0, 1, self.numLinks) - mean) ** 2) / std**2)
 
-        # angles = angles * 0.0
+        angles = angles
         x_values = np.cumsum(linkLength * np.cos(angles))
         y_values = np.cumsum(linkLength * np.sin(angles))
 
@@ -156,11 +155,12 @@ class RopeFactory:
                 targets = [a, b]
                 rel.SetTargets(targets)
 
-        jointX = self.linkHalfLength - 0.5 * self.linkRadius
+        jointX = self.linkHalfLength #- 0.5 * self.linkRadius
+        jointY = self.linkRadius*0.05 if self.double_joints else 0
         for linkInd in range(self.numLinks - 1):
             joint = self.createJoint(scopePath.AppendChild(f"joint_{linkInd}"), stage)
-            joint.CreateLocalPos0Attr(Gf.Vec3f(jointX, 0, 0))
-            joint.CreateLocalPos1Attr(Gf.Vec3f(-jointX, 0, 0))
+            joint.CreateLocalPos0Attr(Gf.Vec3f(jointX, jointY, 0))
+            joint.CreateLocalPos1Attr(Gf.Vec3f(-jointX, -jointY, 0))
             joint.CreateLocalRot0Attr(Gf.Quatf(1.0))
             joint.CreateLocalRot1Attr(Gf.Quatf(1.0))
             joint.CreateBody0Rel().SetTargets(
@@ -169,12 +169,25 @@ class RopeFactory:
             joint.CreateBody1Rel().SetTargets(
                 [Sdf.Path(f"{prim_path}/capsule_{linkInd+1}")]
             )
+            if self.double_joints:
+                joint = self.createJoint(scopePath.AppendChild(f"joint_2_{linkInd}"), stage)
+                joint.CreateLocalPos0Attr(Gf.Vec3f(jointX, -jointY, 0))
+                joint.CreateLocalPos1Attr(Gf.Vec3f(-jointX, jointY, 0))
+                joint.CreateLocalRot0Attr(Gf.Quatf(1.0))
+                joint.CreateLocalRot1Attr(Gf.Quatf(1.0))
+                joint.CreateBody0Rel().SetTargets(
+                    [Sdf.Path(f"{prim_path}/capsule_{linkInd}")]
+                )
+                joint.CreateBody1Rel().SetTargets(
+                    [Sdf.Path(f"{prim_path}/capsule_{linkInd+1}")]
+                )
 
         return prim_utils.get_prim_at_path(scopePath)
 
 
 """stage = omni.usd.get_context().get_stage()
-dem = RopeFactory(0.4)
+temp_stage = Usd.Stage.CreateInMemory()
+dem = RopeFactory(1.2)
 dem.capsuleZ = 0.2
 #dem.rope_damping = 5
 #dem.rope_stiffness = 50
