@@ -288,16 +288,12 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1 / 240
         np.random.seed(self.seed)
-        
-        # Set each stacking cube deterministically
-        """self.scene.cube_1 = RigidObjectCfg(
-            prim_path="{ENV_REGEX_NS}/Cube_1",
-            init_state=RigidObjectCfg.InitialStateCfg(pos=[0.4, 0.0, 0.0203], rot=[1, 0, 0, 0]),
-            spawn=UsdFileCfg(
-                usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/blue_block.usd",
-                scale=self.cube_scale,
-            ),
-        )"""
+
+        # needed to for restoring the scene when replaying a recorded demo.
+        for i in range(60):
+            name = f"capsule_{i}"
+            setattr(self.scene, name, RigidObjectCfg(prim_path=f"/World/envs/env_0/Rope/{name}"))
+
         self.sim.render_interval = self.decimation
         self.teleop_devices = DevicesCfg(
             devices={

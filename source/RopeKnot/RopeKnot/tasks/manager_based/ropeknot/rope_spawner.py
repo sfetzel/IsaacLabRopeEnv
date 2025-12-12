@@ -79,8 +79,8 @@ def spawn_multi_asset(
 class RopeSpawnerCfg(RigidObjectSpawnerCfg):
     func = spawn_multi_asset
     rope_damping = 1.0
-    rope_stiffness = 1e-7
-    coneAngleLimit = 60
+    rope_stiffness = 1e-3
+    coneAngleLimit = 160
     rope_length = 1.2
-    linkHalfLength = 0.009
-    linkRadius = 0.009
+    linkHalfLength = 0.01
+    linkRadius = 0.01

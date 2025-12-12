@@ -3,15 +3,9 @@
 ## Overview
 ![](rope_env.png)
 
-This project/repository serves as a template for building projects or extensions based on Isaac Lab.
-It allows you to develop in an isolated environment, outside of the core Isaac Lab repository.
-
-**Key Features:**
-
-- `Isolation` Work outside the core Isaac Lab repository, ensuring that your development efforts remain self-contained.
-- `Flexibility` This template is set up to allow your code to be run as an extension in Omniverse.
-
-**Keywords:** extension, template, isaaclab
+This repository contains an manager based environment for Isaac Sim/Lab, which features a rope made from capsules.
+An UR5e with a Robotiq Hand-E shall create a knot using the rope.
+The rope will be created using a spawner function. Its position will be slightly randomized as well as its shape.
 
 ## Installation
 
@@ -29,20 +23,24 @@ It allows you to develop in an isolated environment, outside of the core Isaac L
 - Verify that the extension is correctly installed by:
 
     - Listing the available tasks:
-
-        Note: It the task name changes, it may be necessary to update the search pattern `"Template-"`
-        (in the `scripts/list_envs.py` file) so that it can be listed.
-
         ```bash
         # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
         python scripts/list_envs.py
+        ```
+        Should show a table with an entry `STUBA-Ropeknot-v0`. This is the name of the task.
+
+    - Run teleoperation script:
+
+        ```bash
+        # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
+        python scripts/teleop_se3_agent.py --task=STUBA-Ropeknot-v0
         ```
 
     - Running a task:
 
         ```bash
         # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-        python scripts/<RL_LIBRARY>/train.py --task=<TASK_NAME>
+        python scripts/<RL_LIBRARY>/train.py --task=STUBA-Ropeknot-v0
         ```
 
     - Running a task with dummy agents:
@@ -53,13 +51,13 @@ It allows you to develop in an isolated environment, outside of the core Isaac L
 
             ```bash
             # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/zero_agent.py --task=<TASK_NAME>
+            python scripts/zero_agent.py --task=STUBA-Ropeknot-v0
             ```
         - Random-action agent
 
             ```bash
             # use 'FULL_PATH_TO_isaaclab.sh|bat -p' instead of 'python' if Isaac Lab is not installed in Python venv or conda
-            python scripts/random_agent.py --task=<TASK_NAME>
+            python scripts/random_agent.py --task=STUBA-Ropeknot-v0
             ```
 
 ### Set up IDE (Optional)
