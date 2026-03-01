@@ -5,6 +5,7 @@
 
 """Script to run a keyboard teleoperation with Isaac Lab manipulation environments."""
 
+
 """Launch Isaac Sim Simulator first."""
 
 import argparse
@@ -58,7 +59,6 @@ simulation_app = app_launcher.app
 import gymnasium as gym
 import torch
 import RopeKnot.tasks  # noqa: F401
-
 import omni.log
 
 from isaaclab.devices import Se3Gamepad, Se3GamepadCfg, Se3Keyboard, Se3KeyboardCfg, Se3SpaceMouse, Se3SpaceMouseCfg
@@ -89,7 +89,6 @@ def main() -> None:
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs)
     env_cfg.env_name = args_cli.task
     env_cfg.seed = 1234
-
     # modify configuration
     env_cfg.terminations.time_out = None
     if "Lift" in args_cli.task:
@@ -200,6 +199,11 @@ def main() -> None:
             elif args_cli.teleop_device.lower() == "gamepad":
                 teleop_interface = Se3Gamepad(
                     Se3GamepadCfg(pos_sensitivity=0.1 * sensitivity, rot_sensitivity=0.1 * sensitivity)
+                )
+            elif args_cli.teleop_device.lower() == "handpose":
+                from isaaclab.devices.camera import Se3HandPose, Se3HandPoseCfg
+                teleop_interface = Se3HandPose(
+                    Se3KeyboardCfg(pos_sensitivity=0.5 * sensitivity, rot_sensitivity=0.1 * sensitivity)
                 )
             else:
                 omni.log.error(f"Unsupported teleop device: {args_cli.teleop_device}")
