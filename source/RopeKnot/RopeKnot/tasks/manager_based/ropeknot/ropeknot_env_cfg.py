@@ -12,6 +12,7 @@ from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.sensors import TiledCamera, TiledCameraCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
@@ -116,6 +117,18 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(pos=(0.6, 0.0, 0.1)),
+    )
+    
+    tiled_camera: TiledCameraCfg = TiledCameraCfg(
+        prim_path="/World/envs/env_.*/Camera",
+        #[ 0.2705981, 0.6532815, 0.6532815, 0.2705981 ]
+        offset=TiledCameraCfg.OffsetCfg(pos=(1.9, 0.0, 1.5), rot=(-3.6920e-08, -3.8268e-01, -3.2020e-08,  9.2388e-01), convention="world"),
+        data_types=["rgb"],
+        spawn=sim_utils.PinholeCameraCfg(
+            focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
+        ),
+        width=224,
+        height=224,
     )
 
 
