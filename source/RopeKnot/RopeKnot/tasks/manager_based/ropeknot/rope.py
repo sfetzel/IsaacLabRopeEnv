@@ -16,9 +16,9 @@ class RopeFactory:
         :param position: the initial center position of the rope.
         """
         # density in kg/m³
-        self.density = 10
+        self.density = 0.1
         # half length of the cylinder of the capsules.
-        self.linkHalfLength = 0.01
+        self.linkHalfLength = 0.015
         # radius of the halfspheres at the ends of the capsule and the cylinder.
         self.linkRadius = self.linkHalfLength
         # length of the rope.
@@ -31,8 +31,8 @@ class RopeFactory:
         # angle limit for y/z rotation of joints.
         self.coneAngleLimit = 160
         # damping and stiffness for joint DriveAPI.
-        self.rope_damping = 1.0
-        self.rope_stiffness = 1e-6
+        self.rope_damping = 10.0
+        self.rope_stiffness = 50.0
         self.position = position
         self.contactOffset = 0.02
         # the z coodinate of the bottom of the rope.
@@ -61,8 +61,8 @@ class RopeFactory:
             material = UsdPhysics.MaterialAPI.Apply(
                 temp_stage.GetPrimAtPath(physicsMaterialPath)
             )
-            material.CreateStaticFrictionAttr().Set(0.5)
-            material.CreateDynamicFrictionAttr().Set(0.2)
+            material.CreateStaticFrictionAttr().Set(0.2)
+            material.CreateDynamicFrictionAttr().Set(0.1)
             material.CreateRestitutionAttr().Set(0)
 
             self.createRope(ropePrimPath, temp_stage, physicsMaterialPath)
@@ -107,8 +107,8 @@ class RopeFactory:
         :return: the created joint.
         """
         joint = UsdPhysics.Joint.Define(stage, jointPath)
-        lower_limit = -0.2
-        upper_limit = 0.2
+        lower_limit = 0.2
+        upper_limit = -0.2
         # locked DOF (lock - low is greater than high)
         d6Prim = joint.GetPrim()
         limitAPI = UsdPhysics.LimitAPI.Apply(d6Prim, "transX")
@@ -122,7 +122,7 @@ class RopeFactory:
         limitAPI.CreateHighAttr(lower_limit)
         limitAPI = UsdPhysics.LimitAPI.Apply(d6Prim, "rotX")
         limitAPI.CreateLowAttr(upper_limit)
-        limitAPI.CreateHighAttr(upper_limit)
+        limitAPI.CreateHighAttr(lower_limit)
 
         # Moving DOF:
         dofs = ["rotY", "rotZ"]
@@ -176,32 +176,14 @@ class RopeFactory:
         base.AddTranslateOp().Set(value=self.position)
 
         z = self.capsuleZ + self.linkRadius
-        # bend the rope to a random angle.
-        final_angle = 2 * (np.random.uniform() - 0.5) * np.pi / 2
-        angles = np.linspace(0, final_angle, self.numLinks)
+        angles = np.zeros(self.numLinks)
 
-        # add random deformations to the angles.
-        # each deformation is described by a gaussian, which is applied to the angles,
-        # so the rope has a continuous form.
-        for _ in range(2):
-            mean = np.random.uniform()
-            std = np.random.uniform(0.5, 0.8)
-            angles *= 1 + np.exp(
-                -((np.linspace(0, 1, self.numLinks) - mean) ** 2) / std**2
-            )
 
-        x_values = np.cumsum(linkLength * np.cos(angles))
-        y_values = np.cumsum(linkLength * np.sin(angles))
+        x_values = np.cumsum(linkLength * np.ones(self.numLinks))
+        y_values = np.cumsum(linkLength * np.zeros(self.numLinks))
 
-        # move the capsules, such that their center is approximately at (0, 0).
-        center_x, center_y = np.mean(x_values), np.mean(y_values)
-        x_values -= center_x
-        y_values -= center_y
-        # shift the center randomly.
-        center_x += np.random.uniform() * 0.05
-        center_y += np.random.uniform() * 0.05
 
-        angle = 0.0
+        angle = 0
         i = 0
         for x, y, angle in zip(x_values, y_values, angles):
             capsulePath = prim_path.AppendChild(f"capsule_{i}")
@@ -253,5 +235,5 @@ if __name__ == "__main__":
 
     stage = omni.usd.get_context().get_stage()
     dem = RopeFactory(1.2)
-    dem.capsuleZ = 0.2
+    dem.capsuleZ = 0.1
     print(dem.create("/World/Rope", stage))

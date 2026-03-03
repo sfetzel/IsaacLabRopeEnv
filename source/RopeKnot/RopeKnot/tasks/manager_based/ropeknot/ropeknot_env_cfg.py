@@ -16,7 +16,7 @@ from isaaclab.sensors import TiledCamera, TiledCameraCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
-from .rope_spawner import RopeSpawnerCfg
+
 from isaaclab.assets import RigidObjectCfg
 from . import mdp
 from math import pi
@@ -113,7 +113,13 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     rope: ArticulationCfg = ArticulationCfg(
         prim_path="/World/envs/env_.*/Rope",
         spawn=sim_utils.UsdFileCfg(
-            usd_path=f"/home/simonf9/Projects/IsaacLabRopeEnv/source/RopeKnot/rope.usd"),
+            usd_path=f"{os.path.dirname(os.path.abspath(__file__))}/assets/rope.usd",
+            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+                enabled_self_collisions=True,
+                solver_position_iteration_count=4,
+                solver_velocity_iteration_count=2,
+            )
+        ),
         init_state=ArticulationCfg.InitialStateCfg(pos=(0.6, 0.0, 0.1)),
         actuators=dict(),
     )
@@ -213,6 +219,16 @@ class EventCfg:
             "mean": 0.0,
             "std": 0.02,
             "asset_cfg": SceneEntityCfg("robot"),
+        },
+    )
+
+    randomize_rope_joint_state = EventTerm(
+        func=randomize_joint_by_gaussian_offset,
+        mode="reset",
+        params={
+            "mean": 0.0,
+            "std": 0.02,
+            "asset_cfg": SceneEntityCfg("rope"),
         },
     )
 
