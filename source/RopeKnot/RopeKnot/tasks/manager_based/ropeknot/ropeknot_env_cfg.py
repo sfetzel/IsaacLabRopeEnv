@@ -110,14 +110,14 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     # articulation
     robot: ArticulationCfg = UR5e_ROBOTIQ_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
-    # rigid object
-    rope: RigidObjectCfg = AssetBaseCfg(
+    rope: ArticulationCfg = ArticulationCfg(
         prim_path="/World/envs/env_.*/Rope",
-        spawn=RopeSpawnerCfg(
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-        ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.6, 0.0, 0.1)),
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=f"/home/simonf9/Projects/IsaacLabRopeEnv/source/RopeKnot/rope.usd"),
+        init_state=ArticulationCfg.InitialStateCfg(pos=(0.6, 0.0, 0.1)),
+        actuators=dict(),
     )
+
     
     tiled_camera: TiledCameraCfg = TiledCameraCfg(
         prim_path="/World/envs/env_.*/Camera",
@@ -268,7 +268,7 @@ from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
 class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: RopeknotSceneCfg = RopeknotSceneCfg(
-        num_envs=32, env_spacing=2.0, replicate_physics=False
+        num_envs=32, env_spacing=2.0, 
     )
     cube_properties = RigidBodyPropertiesCfg(
         solver_position_iteration_count=16,
@@ -299,14 +299,6 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 1 / 240
         np.random.seed(self.seed)
 
-        # needed to for restoring the scene when replaying a recorded demo.
-        for i in range(60):
-            name = f"capsule_{i}"
-            setattr(
-                self.scene,
-                name,
-                RigidObjectCfg(prim_path=f"/World/envs/env_0/Rope/{name}"),
-            )
 
         self.sim.render_interval = self.decimation
         self.teleop_devices = DevicesCfg(

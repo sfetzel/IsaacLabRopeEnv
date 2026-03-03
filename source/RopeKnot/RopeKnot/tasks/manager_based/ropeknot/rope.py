@@ -107,8 +107,8 @@ class RopeFactory:
         :return: the created joint.
         """
         joint = UsdPhysics.Joint.Define(stage, jointPath)
-        lower_limit = -0.02
-        upper_limit = 0.02
+        lower_limit = -0.2
+        upper_limit = 0.2
         # locked DOF (lock - low is greater than high)
         d6Prim = joint.GetPrim()
         limitAPI = UsdPhysics.LimitAPI.Apply(d6Prim, "transX")
