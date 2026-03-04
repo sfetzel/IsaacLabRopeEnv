@@ -56,5 +56,11 @@ def randomize_rope_joints(
     rope.set_joint_velocity_target(joint_vel, env_ids=env_ids)
     rope.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
 
-    # When the rope rotated, it needs to be reset.
-    rope.write_root_state_to_sim(rope.data.default_root_state, env_ids=env_ids)
+    # It might happen that the rope is rotated and moved,
+    # therefore its root state needs to be reset.
+    root_state = rope.data.default_root_state.clone()
+
+    # Add environment origins
+    root_state[:, 0:3] += env.scene.env_origins[env_ids]
+
+    rope.write_root_state_to_sim(root_state, env_ids=env_ids)
