@@ -120,7 +120,7 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
                 solver_velocity_iteration_count=2,
             )
         ),
-        init_state=ArticulationCfg.InitialStateCfg(pos=(0.6, 0.0, 0.1)),
+        init_state=ArticulationCfg.InitialStateCfg(pos=(0.6, 0.0, 0.0), rot=(0.7071067, 0, 0, 7071067)),
         actuators=dict(),
     )
 
@@ -223,11 +223,13 @@ class EventCfg:
     )
 
     randomize_rope_joint_state = EventTerm(
-        func=randomize_joint_by_gaussian_offset,
+        func=mdp.randomize_rope_joints,
         mode="reset",
         params={
-            "mean": 0.0,
-            "std": 0.02,
+            "angle_rad": 0.03,
+            "std_min": 0.2,
+            "std_max": 0.3,
+            "repeats": 3,
             "asset_cfg": SceneEntityCfg("rope"),
         },
     )

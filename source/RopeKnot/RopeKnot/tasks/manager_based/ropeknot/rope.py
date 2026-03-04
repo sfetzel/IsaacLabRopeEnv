@@ -33,7 +33,7 @@ class RopeFactory:
         # damping and stiffness for joint DriveAPI.
         self.rope_damping = 10.0
         self.rope_stiffness = 50.0
-        self.position = position
+        self.position = position #(position[0] - self.ropeLength / 2, position[1], position[2])
         self.contactOffset = 0.02
         # the z coodinate of the bottom of the rope.
         self.capsuleZ = 0.0
@@ -179,7 +179,7 @@ class RopeFactory:
         angles = np.zeros(self.numLinks)
 
 
-        x_values = np.cumsum(linkLength * np.ones(self.numLinks))
+        x_values = np.cumsum(linkLength * np.ones(self.numLinks)) - self.ropeLength / 2.0
         y_values = np.cumsum(linkLength * np.zeros(self.numLinks))
 
 
@@ -235,5 +235,5 @@ if __name__ == "__main__":
 
     stage = omni.usd.get_context().get_stage()
     dem = RopeFactory(1.2)
-    dem.capsuleZ = 0.1
+    dem.capsuleZ = 0.0
     print(dem.create("/World/Rope", stage))
