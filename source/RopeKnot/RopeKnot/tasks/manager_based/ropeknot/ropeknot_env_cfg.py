@@ -120,10 +120,9 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
                 solver_velocity_iteration_count=2,
             )
         ),
-        init_state=ArticulationCfg.InitialStateCfg(pos=(0.6, 0.0, 0.0), rot=(0.7071067, 0, 0, 7071067)),
+        init_state=ArticulationCfg.InitialStateCfg(pos=(0.6, 0.0, 0.01), rot=(0.7071067, 0, 0, 0.7071067)),
         actuators=dict(),
     )
-
     
     tiled_camera: TiledCameraCfg = TiledCameraCfg(
         prim_path="/World/envs/env_.*/Camera",

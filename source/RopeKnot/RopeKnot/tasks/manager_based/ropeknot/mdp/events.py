@@ -51,12 +51,10 @@ def randomize_rope_joints(
 
     joint_pos_limits = rope.data.soft_joint_pos_limits[env_ids]
     joint_pos = joint_pos.clamp_(joint_pos_limits[..., 0], joint_pos_limits[..., 1])
-
-    # When the rope rotated, it needs to be reset.
-    #rope.set_world_pose(position=(0.0, 0.0, 0.0), orientation=(1., 0., 0., 0.), env_ids=env_ids)
-    #rope.set_joint_positions(joint_pos, env_ids=env_ids)
-    #rope.set_joint_velocities(joint_vel, env_ids=env_ids)
-
+    
     rope.set_joint_position_target(joint_pos, env_ids=env_ids)
     rope.set_joint_velocity_target(joint_vel, env_ids=env_ids)
     rope.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+
+    # When the rope rotated, it needs to be reset.
+    rope.write_root_state_to_sim(rope.data.default_root_state, env_ids=env_ids)

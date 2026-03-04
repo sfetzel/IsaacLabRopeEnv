@@ -16,7 +16,7 @@ class RopeFactory:
         :param position: the initial center position of the rope.
         """
         # density in kg/m³
-        self.density = 0.1
+        self.density = 10.0
         # half length of the cylinder of the capsules.
         self.linkHalfLength = 0.015
         # radius of the halfspheres at the ends of the capsule and the cylinder.
@@ -33,7 +33,7 @@ class RopeFactory:
         # damping and stiffness for joint DriveAPI.
         self.rope_damping = 10.0
         self.rope_stiffness = 50.0
-        self.position = position #(position[0] - self.ropeLength / 2, position[1], position[2])
+        self.position = position
         self.contactOffset = 0.02
         # the z coodinate of the bottom of the rope.
         self.capsuleZ = 0.0
