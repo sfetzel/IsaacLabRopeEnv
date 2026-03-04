@@ -126,8 +126,7 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     
     tiled_camera: TiledCameraCfg = TiledCameraCfg(
         prim_path="/World/envs/env_.*/Camera",
-        #[ 0.2705981, 0.6532815, 0.6532815, 0.2705981 ]
-        offset=TiledCameraCfg.OffsetCfg(pos=(1.9, 0.0, 1.5), rot=(-3.6920e-08, -3.8268e-01, -3.2020e-08,  9.2388e-01), convention="world"),
+        offset=TiledCameraCfg.OffsetCfg(pos=(1.4, 0.0, 1.0), rot=(-3.6920e-08, -3.8268e-01, -3.2020e-08,  9.2388e-01), convention="world"),
         data_types=["rgb"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
@@ -194,9 +193,11 @@ class ObservationsCfg:
 
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
-        # eef_pos = ObsTerm(func=mdp.ee_frame_pos)
-        # eef_quat = ObsTerm(func=mdp.ee_frame_quat)
-        # gripper_pos = ObsTerm(func=mdp.gripper_pos)
+        #eef_pos = ObsTerm(func=mdp.ee_frame_pos)
+        #eef_quat = ObsTerm(func=mdp.ee_frame_quat)
+        #gripper_pos = ObsTerm(func=mdp.gripper_pos)
+
+        image_feat = ObsTerm(func=mdp.image_features)
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -242,6 +243,10 @@ class RewardsCfg:
     alive = RewTerm(func=mdp.is_alive, weight=1.0)
     # (2) Failure penalty
     terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
+
+    model = RewTerm(func=mdp.model_reward, weight=1.0, params={
+        "camera_cfg": SceneEntityCfg("tiled_camera"),
+    })
     # (3) Primary task: keep pole upright
     # pole_pos = RewTerm(
     #    func=mdp.joint_pos_target_l2,
@@ -285,7 +290,7 @@ from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
 class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: RopeknotSceneCfg = RopeknotSceneCfg(
-        num_envs=32, env_spacing=2.0, 
+        num_envs=4, env_spacing=2.0, 
     )
     cube_properties = RigidBodyPropertiesCfg(
         solver_position_iteration_count=16,
