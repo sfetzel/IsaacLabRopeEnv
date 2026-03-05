@@ -98,7 +98,9 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
 
     # ground plane
     ground = AssetBaseCfg(
-        prim_path="/World/defaultGroundPlane", spawn=sim_utils.GroundPlaneCfg()
+        prim_path="/World/defaultGroundPlane", spawn=sim_utils.GroundPlaneCfg(
+            usd_path=f"{os.path.dirname(os.path.abspath(__file__))}/assets/ground_plane.usd",
+        )
     )
 
     # lights
@@ -191,17 +193,16 @@ class ObservationsCfg:
     class PolicyCfg(ObsGroup):
         """Observations for policy group."""
 
+        image_feat = ObsTerm(func=mdp.cached_image_features_resnet18)
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
-        #eef_pos = ObsTerm(func=mdp.ee_frame_pos)
-        #eef_quat = ObsTerm(func=mdp.ee_frame_quat)
-        #gripper_pos = ObsTerm(func=mdp.gripper_pos)
-
-        image_feat = ObsTerm(func=mdp.image_features)
+        # eef_pos = ObsTerm(func=mdp.ee_frame_pos)
+        # eef_quat = ObsTerm(func=mdp.ee_frame_quat)
+        # gripper_pos = ObsTerm(func=mdp.gripper_pos)
 
         def __post_init__(self):
             self.enable_corruption = False
-            self.concatenate_terms = False
+            self.concatenate_terms = True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
@@ -240,7 +241,7 @@ class RewardsCfg:
     """Reward terms for the MDP."""
 
     # (1) Constant running reward
-    alive = RewTerm(func=mdp.is_alive, weight=1.0)
+    #alive = RewTerm(func=mdp.is_alive, weight=1.0)
     # (2) Failure penalty
     terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
 
@@ -290,17 +291,8 @@ from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
 class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: RopeknotSceneCfg = RopeknotSceneCfg(
-        num_envs=4, env_spacing=2.0, 
+        num_envs=32, env_spacing=2.0, 
     )
-    cube_properties = RigidBodyPropertiesCfg(
-        solver_position_iteration_count=16,
-        solver_velocity_iteration_count=1,
-        max_angular_velocity=1000.0,
-        max_linear_velocity=1000.0,
-        max_depenetration_velocity=5.0,
-        disable_gravity=False,
-    )
-    cube_scale = (3.0, 3.0, 3.0)
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
@@ -315,10 +307,11 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
         # general settings
         self.decimation = 2
         self.episode_length_s = 5
+        self.max_episode_length = 15
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)
         # simulation settings
-        self.sim.dt = 1 / 240
+        self.sim.dt = 1 / 60
         np.random.seed(self.seed)
 
 

@@ -6,6 +6,8 @@
 from __future__ import annotations
 
 import torch
+import torch.nn as nn
+from torchvision import models
 from typing import TYPE_CHECKING
 
 from isaaclab.assets import Articulation
@@ -19,23 +21,74 @@ if TYPE_CHECKING:
 import numpy as np
 import cv2
 
-reward_model = torch.jit.load("dummy_reward_model.pt")
+
+# ---------- Main model ----------
+class ResNet18_Features(nn.Module):
+    def __init__(self, pretrained=True, freeze_encoder=True):
+        super().__init__()
+
+        resnet = models.resnet18(pretrained=pretrained)
+
+        # ----- Encoder -----
+        self.enc0 = nn.Sequential(
+            resnet.conv1,  # 64, 112x112
+            resnet.bn1,
+            resnet.relu
+        )
+        self.pool = resnet.maxpool  # -> 56x56
+
+        self.enc1 = resnet.layer1   # 64, 56x56
+        self.enc2 = resnet.layer2   # 128, 28x28
+        self.enc3 = resnet.layer3   # 256, 14x14
+        self.enc4 = resnet.layer4   # 512, 7x7
+
+        # Freeze encoder if requested
+        if freeze_encoder:
+            for p in self.parameters():
+                p.requires_grad = False
+
+    def forward(self, x):
+
+        # ----- Encoder -----
+        x0 = self.enc0(x)      # 64, 112x112
+        x1 = self.pool(x0)     # 64, 56x56
+        x1 = self.enc1(x1)     # 64, 56x56
+        x2 = self.enc2(x1)     # 128, 28x28
+        x3 = self.enc3(x2)     # 256, 14x14
+        x4 = self.enc4(x3)     # 512, 7x7
+
+        return x0, x1, x2, x3, x4
+
+
+feature_encoder = ResNet18_Features()
+feature_encoder.eval()
+reward_model = torch.jit.load("segmentation+reward.pt")
 reward_model.eval()
 
 
 def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Tensor:
     """Penalize joint position deviation from a target value."""
     # extract the used quantities (to enable type-hinting)
-    # camera: TiledCamera = env.scene[camera_cfg.name]
-    # data = camera.data.output["rgb"]  # (envs, H, W, C) in format (0,255)
-    
-    if "image_feat" in env.obs_buf["policy"]:
-        image_features = env.obs_buf["policy"]["image_feat"]
-        reward_model.to(image_features.device)
-        with torch.no_grad():
-            rewards = reward_model(image_features)
-            
-            return rewards.squeeze(-1)
-    else:
-        print("Could not find image feature vector in observations.")
-    return 0
+    camera: TiledCamera = env.scene[camera_cfg.name]
+    data = camera.data.output["rgb"]  # (envs, H, W, C) in format (0,255)
+    model_device = env.device
+
+    with torch.no_grad():
+        feature_encoder.to(model_device)
+        # move the image to the model device
+        image_proc = data.to(model_device)
+        # permute the image to (num_envs, channel, height, width)
+        image_proc = image_proc.permute(0, 3, 1, 2).float() / 255.0
+        # normalize the image
+        mean = torch.tensor([0.485, 0.456, 0.406], device=model_device).view(1, 3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225], device=model_device).view(1, 3, 1, 1)
+        image_proc = (image_proc - mean) / std
+
+        # forward the images through the model
+        image_features = feature_encoder(image_proc)  # (x0, x1, x2, x3, x4).
+        env._cached_image_features = image_features
+
+        reward_model.to(model_device)
+        rewards = reward_model(*image_features)
+        
+        return rewards.squeeze(-1)
