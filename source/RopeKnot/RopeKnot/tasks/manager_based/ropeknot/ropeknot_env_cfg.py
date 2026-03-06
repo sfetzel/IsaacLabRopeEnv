@@ -118,8 +118,8 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
             usd_path=f"{os.path.dirname(os.path.abspath(__file__))}/assets/rope.usd",
             articulation_props=sim_utils.ArticulationRootPropertiesCfg(
                 enabled_self_collisions=True,
-                solver_position_iteration_count=4,
-                solver_velocity_iteration_count=2,
+                solver_position_iteration_count=32,
+                solver_velocity_iteration_count=4,
             )
         ),
         init_state=ArticulationCfg.InitialStateCfg(pos=(0.6, 0.0, 0.01), rot=(0.7071067, 0, 0, 0.7071067)),
@@ -311,7 +311,7 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)
         # simulation settings
-        self.sim.dt = 1 / 60
+        self.sim.dt = 1 / 120
         np.random.seed(self.seed)
 
 

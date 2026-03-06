@@ -16,7 +16,7 @@ class RopeFactory:
         :param position: the initial center position of the rope.
         """
         # density in kg/m³
-        self.density = 10.0
+        self.density = 100.0
         # half length of the cylinder of the capsules.
         self.linkHalfLength = 0.015
         # radius of the halfspheres at the ends of the capsule and the cylinder.
@@ -61,8 +61,8 @@ class RopeFactory:
             material = UsdPhysics.MaterialAPI.Apply(
                 temp_stage.GetPrimAtPath(physicsMaterialPath)
             )
-            material.CreateStaticFrictionAttr().Set(0.2)
-            material.CreateDynamicFrictionAttr().Set(0.1)
+            material.CreateStaticFrictionAttr().Set(0.5)
+            material.CreateDynamicFrictionAttr().Set(0.5)
             material.CreateRestitutionAttr().Set(0)
 
             self.createRope(ropePrimPath, temp_stage, physicsMaterialPath)
