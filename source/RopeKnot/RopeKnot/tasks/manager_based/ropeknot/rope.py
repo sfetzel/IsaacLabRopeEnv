@@ -16,9 +16,9 @@ class RopeFactory:
         :param position: the initial center position of the rope.
         """
         # density in kg/m³
-        self.density = 100.0
+        self.density = 10.0
         # half length of the cylinder of the capsules.
-        self.linkHalfLength = 0.015
+        self.linkHalfLength = 0.01
         # radius of the halfspheres at the ends of the capsule and the cylinder.
         self.linkRadius = self.linkHalfLength
         # length of the rope.
@@ -31,13 +31,13 @@ class RopeFactory:
         # angle limit for y/z rotation of joints.
         self.coneAngleLimit = 160
         # damping and stiffness for joint DriveAPI.
-        self.rope_damping = 10.0
+        self.rope_damping = 0.5
         self.rope_stiffness = 50.0
         self.position = position
         self.contactOffset = 0.02
         # the z coodinate of the bottom of the rope.
         self.capsuleZ = 0.0
-        self.filter_collisions = False
+        self.filter_collisions = True
         self.double_joints = False
 
     def create(self, prim_path: str, stage):
@@ -107,8 +107,8 @@ class RopeFactory:
         :return: the created joint.
         """
         joint = UsdPhysics.Joint.Define(stage, jointPath)
-        lower_limit = 0.2
-        upper_limit = -0.2
+        lower_limit = 0.001
+        upper_limit = -0.001
         # locked DOF (lock - low is greater than high)
         d6Prim = joint.GetPrim()
         limitAPI = UsdPhysics.LimitAPI.Apply(d6Prim, "transX")
@@ -202,6 +202,15 @@ class RopeFactory:
                 b = Sdf.Path(f"{prim_path}/capsule_{i+1}")
                 targets = [a, b]
                 rel.SetTargets(targets)
+
+                if i > 0:
+                    fp = UsdPhysics.FilteredPairsAPI.Apply(rope_prim)
+                    rel = fp.CreateFilteredPairsRel()
+                    a = Sdf.Path(f"{prim_path}/capsule_{i}")
+                    b = Sdf.Path(f"{prim_path}/capsule_{i-1}")
+                    targets = [a, b]
+                    rel.SetTargets(targets)
+
 
         jointX = self.linkHalfLength
         jointY = self.linkRadius * 0.05 if self.double_joints else 0

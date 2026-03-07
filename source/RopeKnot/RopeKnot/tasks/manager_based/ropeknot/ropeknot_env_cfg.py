@@ -4,8 +4,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 
+from typing import Any, Sequence
+
 import isaaclab.sim as sim_utils
-from isaaclab.assets import ArticulationCfg, AssetBaseCfg
+from isaaclab.assets import ArticulationCfg, AssetBaseCfg, RigidObjectCfg, RigidObjectCollectionCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
@@ -17,11 +19,12 @@ from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 
-from isaaclab.assets import RigidObjectCfg
+from isaaclab.assets import RigidObjectCfg, AssetBase
 from . import mdp
 from math import pi
 import numpy as np
 import os
+
 
 ##
 # Pre-defined configs
@@ -112,18 +115,12 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     # articulation
     robot: ArticulationCfg = UR5e_ROBOTIQ_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
-    rope: ArticulationCfg = ArticulationCfg(
-        prim_path="/World/envs/env_.*/Rope",
+    rope: AssetBaseCfg = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/Rope",
         spawn=sim_utils.UsdFileCfg(
             usd_path=f"{os.path.dirname(os.path.abspath(__file__))}/assets/rope.usd",
-            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-                enabled_self_collisions=True,
-                solver_position_iteration_count=32,
-                solver_velocity_iteration_count=4,
-            )
         ),
-        init_state=ArticulationCfg.InitialStateCfg(pos=(0.6, 0.0, 0.01), rot=(0.7071067, 0, 0, 0.7071067)),
-        actuators=dict(),
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.6, 0.0, 0.01), rot=(0.7071067, 0, 0, 0.7071067)),
     )
     
     tiled_camera: TiledCameraCfg = TiledCameraCfg(
@@ -227,11 +224,10 @@ class EventCfg:
         func=mdp.randomize_rope_joints,
         mode="reset",
         params={
-            "angle_rad": 0.03,
-            "std_min": 0.2,
-            "std_max": 0.3,
-            "repeats": 3,
-            "asset_cfg": SceneEntityCfg("rope"),
+            "angle_min": 0.2,
+            "angle_max": 0.5,
+            "capsule_subpath": "/capsule_.*",
+            "rope_path": "Rope/Rope"
         },
     )
 
