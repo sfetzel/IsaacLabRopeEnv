@@ -16,7 +16,7 @@ class RopeFactory:
         :param position: the initial center position of the rope.
         """
         # density in kg/m³
-        self.density = 10.0
+        self.density = 5.0
         # half length of the cylinder of the capsules.
         self.linkHalfLength = 0.01
         # radius of the halfspheres at the ends of the capsule and the cylinder.
@@ -31,8 +31,8 @@ class RopeFactory:
         # angle limit for y/z rotation of joints.
         self.coneAngleLimit = 160
         # damping and stiffness for joint DriveAPI.
-        self.rope_damping = 0.5
-        self.rope_stiffness = 50.0
+        self.rope_damping = 5.0
+        self.rope_stiffness = 100.0
         self.position = position
         self.contactOffset = 0.02
         # the z coodinate of the bottom of the rope.
@@ -62,7 +62,7 @@ class RopeFactory:
                 temp_stage.GetPrimAtPath(physicsMaterialPath)
             )
             material.CreateStaticFrictionAttr().Set(0.5)
-            material.CreateDynamicFrictionAttr().Set(0.5)
+            material.CreateDynamicFrictionAttr().Set(0.3)
             material.CreateRestitutionAttr().Set(0)
 
             self.createRope(ropePrimPath, temp_stage, physicsMaterialPath)

@@ -125,7 +125,7 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     
     tiled_camera: TiledCameraCfg = TiledCameraCfg(
         prim_path="/World/envs/env_.*/Camera",
-        offset=TiledCameraCfg.OffsetCfg(pos=(1.4, 0.0, 1.0), rot=(-3.6920e-08, -3.8268e-01, -3.2020e-08,  9.2388e-01), convention="world"),
+        offset=TiledCameraCfg.OffsetCfg(pos=(1.2, 0.0, 1.0), rot=(-3.6920e-08, -3.8268e-01, -3.2020e-08,  9.2388e-01), convention="world"),
         data_types=["rgb"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
@@ -193,6 +193,8 @@ class ObservationsCfg:
         image_feat = ObsTerm(func=mdp.cached_image_features_resnet18)
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
+        image = ObsTerm(func=mdp.image) # for debugging only
+
         # eef_pos = ObsTerm(func=mdp.ee_frame_pos)
         # eef_quat = ObsTerm(func=mdp.ee_frame_quat)
         # gripper_pos = ObsTerm(func=mdp.gripper_pos)
@@ -224,8 +226,8 @@ class EventCfg:
         func=mdp.randomize_rope_joints,
         mode="reset",
         params={
-            "angle_min": 0.2,
-            "angle_max": 0.5,
+            "angle_min": 1.4,
+            "angle_max": 1.6,
             "capsule_subpath": "/capsule_.*",
             "rope_path": "Rope/Rope"
         },
@@ -244,28 +246,26 @@ class RewardsCfg:
     model = RewTerm(func=mdp.model_reward, weight=1.0, params={
         "camera_cfg": SceneEntityCfg("tiled_camera"),
     })
-    # (3) Primary task: keep pole upright
-    # pole_pos = RewTerm(
-    #    func=mdp.joint_pos_target_l2,
-    #    weight=-1.0,
-    #    params={
-    #        "asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"]),
-    #        "target": 0.0,
-    #    },
-    # )
-    # (4) Shaping tasks: lower cart velocity
-    # cart_vel = RewTerm(
-    #    func=mdp.joint_vel_l1,
-    #    weight=-0.01,
-    #    params={"asset_cfg": SceneEntityCfg("robot", joint_names=["slider_to_cart"])},
-    # )
-    # (5) Shaping tasks: lower pole angular velocity
-    # pole_vel = RewTerm(
-    #    func=mdp.joint_vel_l1,
-    #    weight=-0.005,
-    #    params={"asset_cfg": SceneEntityCfg("robot", joint_names=["cart_to_pole"])},
-    # )
 
+    # The Action Penalty
+    action_rate = RewTerm(
+        func=mdp.action_l2,
+        weight=-1e-2, # Negative weight to penalize
+        params={}
+    )
+    
+    # Optional: Penalty for change in actions (smoothness)
+    action_control_glitch = RewTerm(
+        func=mdp.action_rate_l2, 
+        weight=-0.01, 
+        params={}
+    )
+
+    joint_velocities = RewTerm(
+        func=mdp.joint_vel_l2,
+        weight=-1e-2,
+        params={}
+    )
 
 @configclass
 class TerminationsCfg:
@@ -287,7 +287,7 @@ from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
 class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: RopeknotSceneCfg = RopeknotSceneCfg(
-        num_envs=32, env_spacing=2.0, 
+        num_envs=128, env_spacing=2.0, 
     )
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
@@ -301,9 +301,9 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self) -> None:
         """Post initialization."""
         # general settings
-        self.decimation = 2
+        self.decimation = 5
         self.episode_length_s = 5
-        self.max_episode_length = 15
+        self.max_episode_length = 8
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)
         # simulation settings
