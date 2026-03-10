@@ -193,7 +193,7 @@ class ObservationsCfg:
         image_feat = ObsTerm(func=mdp.cached_image_features_resnet18)
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
-        image = ObsTerm(func=mdp.image) # for debugging only
+        #image = ObsTerm(func=mdp.image) # for debugging only
 
         # eef_pos = ObsTerm(func=mdp.ee_frame_pos)
         # eef_quat = ObsTerm(func=mdp.ee_frame_quat)
