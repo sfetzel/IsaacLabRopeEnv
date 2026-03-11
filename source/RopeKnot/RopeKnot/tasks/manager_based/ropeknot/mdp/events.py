@@ -25,8 +25,8 @@ def bend(d, target_angle, pos, orientation):
     pos[:, 0] = torch.cumsum(d * torch.cos(angles), 0)
     pos[:, 1] = torch.cumsum(d * torch.sin(angles), 0)
     orientation *= 0
-    orientation[:, 0] = torch.cos(angles*0.5)
-    orientation[:, 3] = torch.sin(angles*0.5)
+    orientation[:, 0] = torch.cos(angles * 0.5)
+    orientation[:, 3] = torch.sin(angles * 0.5)
 
 
 def randomize_rope_joints(
@@ -41,27 +41,35 @@ def randomize_rope_joints(
     Randomizes the rope pose by modifying the "z" DOF rotation.
     The angles are modified such that they have the shape of a sum of gaussians.
     """
-    # ropes = sim_utils.find_matching_prims("")
-    ropes = [ f"/World/envs/env_{id}/{rope_path}" for id in env_ids ]
+    prims = None
+    if hasattr(env, "_cache_rope_rigidprim"):
+        prims = env._cache_rope_rigidprim
+    else:
+        prims = RigidPrim(prim_paths_expr=f"/World/envs/env_.*/{rope_path}" + capsule_subpath, name="rigid_prim_view")
+        env._cache_rope_rigidprim = prims
+    
+    ropes = [f"/World/envs/env_{id}/{rope_path}" for id in env_ids]
+    all_pos, all_orient = prims.get_local_poses()
 
     for rope_path in ropes:
-        prims = RigidPrim(prim_paths_expr=rope_path + capsule_subpath, name="rigid_prim_view")
-
-        pos, orient = prims.get_local_poses()
+        ids = [i for i in range(prims.count) if prims.prim_paths[i].startswith(rope_path)]
+        pos = all_pos[ids]
+        orient = all_orient[ids]
 
         d = torch.norm(pos[:-1, :] - pos[1:, :], dim=1).mean()
 
-        center = pos.shape[0] //2
+        center = pos.shape[0] // 2
         angles = torch.distributions.uniform.Uniform(torch.tensor([angle_min]), torch.tensor([angle_max]))
-        bend(d, angles.sample().item(), pos[(center+1):, :], orient[(center+1):, :])
+        bend(d, angles.sample().item(), pos[(center + 1):, :], orient[(center + 1):, :])
         bend(-d, -angles.sample().item(), pos[:center, :], orient[:center, :])
-        pos[center, :2] *= 0 # reset center position
+        pos[center, :2] *= 0  # reset center position
 
         # correct ordering.
         pos[:center, :] = torch.flip(pos[:center, :], dims=(0,))
         orient[:center, :] = torch.flip(orient[:center, :], dims=(0,))
 
-        prims.set_local_poses(pos, orient)
-        velocities = prims.get_velocities() * 0.0
-        prims.set_velocities(velocities)
-
+        all_pos[ids] = pos
+        all_orient[ids] = orient
+    
+    prims.set_local_poses(all_pos, all_orient)
+    prims.set_velocities(prims.get_velocities() * 0.0)
