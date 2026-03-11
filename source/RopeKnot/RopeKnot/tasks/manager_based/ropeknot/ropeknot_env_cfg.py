@@ -18,7 +18,7 @@ from isaaclab.sensors import TiledCamera, TiledCameraCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
-
+from isaacsim.core.prims import XFormPrim
 from isaaclab.assets import RigidObjectCfg, AssetBase
 from . import mdp
 from math import pi
@@ -207,6 +207,10 @@ class ObservationsCfg:
     policy: PolicyCfg = PolicyCfg()
 
 
+def hide_robot(env, env_ids):
+    robots = XFormPrim(prim_paths_expr="/World/envs/env_.*/Robot")
+    robots.set_visibilities(visibilities=[False] * env.num_envs)
+
 @configclass
 class EventCfg:
     """Configuration for events."""
@@ -220,6 +224,12 @@ class EventCfg:
             "std": 0.02,
             "asset_cfg": SceneEntityCfg("robot"),
         },
+    )
+
+    hide_robot = EventTerm(
+        func=hide_robot,
+        mode="reset",
+        params={}
     )
 
     randomize_rope_joint_state = EventTerm(
@@ -243,9 +253,18 @@ class RewardsCfg:
     # (2) Failure penalty
     terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
 
+    step_penalty = RewTerm(
+        func=mdp.step_penalty,
+        weight=-0.1,
+    )
+
     model = RewTerm(func=mdp.model_reward, weight=1.0, params={
         "camera_cfg": SceneEntityCfg("tiled_camera"),
     })
+
+    mask_change = RewTerm(
+        func=mdp.mask_change, weight=0.1
+    )
 
     # The Action Penalty
     action_rate = RewTerm(

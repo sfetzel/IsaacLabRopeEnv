@@ -89,6 +89,25 @@ def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Te
         env._cached_image_features = image_features
 
         reward_model.to(model_device)
-        rewards = reward_model(*image_features)
-        
-        return rewards.squeeze(-1)
+        rewards, masks = reward_model(*image_features)
+        rewards = rewards.squeeze(-1)
+        env._cached_masks = masks
+
+        result = rewards
+        return result
+
+
+def mask_change(env):
+    result = 0
+    if hasattr(env, "_last_masks"):
+        current_masks = env._cached_masks.flatten(start_dim=1)
+        last_masks = env._last_masks.flatten(start_dim=1)
+
+        return torch.mean(torch.abs(current_masks - last_masks), dim=1)
+
+    env._last_masks = env._cached_masks
+    return result
+
+
+def step_penalty(env):
+    return torch.ones(env.num_envs, device=env.device)

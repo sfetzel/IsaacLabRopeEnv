@@ -47,7 +47,7 @@ def randomize_rope_joints(
     else:
         prims = RigidPrim(prim_paths_expr=f"/World/envs/env_.*/{rope_path}" + capsule_subpath, name="rigid_prim_view")
         env._cache_rope_rigidprim = prims
-    
+
     ropes = [f"/World/envs/env_{id}/{rope_path}" for id in env_ids]
     all_pos, all_orient = prims.get_local_poses()
 
