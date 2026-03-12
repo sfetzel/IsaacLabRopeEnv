@@ -193,7 +193,6 @@ class ObservationsCfg:
         image_feat = ObsTerm(func=mdp.cached_image_features_resnet18)
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
-        #image = ObsTerm(func=mdp.image) # for debugging only
 
         # eef_pos = ObsTerm(func=mdp.ee_frame_pos)
         # eef_quat = ObsTerm(func=mdp.ee_frame_quat)
@@ -203,8 +202,18 @@ class ObservationsCfg:
             self.enable_corruption = False
             self.concatenate_terms = True
 
+    @configclass
+    class DebugCfg(ObsGroup):
+        image = ObsTerm(func=mdp.image)  # for debugging only
+        mask = ObsTerm(func=mdp.cached_masks)
+
+        def __post_init__(self):
+            self.enable_corruption = False
+            self.concatenate_terms = False
+
     # observation groups
     policy: PolicyCfg = PolicyCfg()
+    debug: DebugCfg = DebugCfg()
 
 
 def hide_robot(env, env_ids):
@@ -226,11 +235,11 @@ class EventCfg:
         },
     )
 
-    hide_robot = EventTerm(
-        func=hide_robot,
-        mode="reset",
-        params={}
-    )
+    # hide_robot = EventTerm(
+    #     func=hide_robot,
+    #     mode="reset",
+    #     params={}
+    # )
 
     randomize_rope_joint_state = EventTerm(
         func=mdp.randomize_rope_joints,
@@ -263,7 +272,7 @@ class RewardsCfg:
     })
 
     mask_change = RewTerm(
-        func=mdp.mask_change, weight=0.1
+        func=mdp.mask_change, weight=0.01
     )
 
     # The Action Penalty
