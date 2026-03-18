@@ -30,3 +30,9 @@ def cached_masks(env: ManagerBasedEnv):
     if hasattr(env, "_cached_masks"):
         result = env._cached_masks
     return result
+
+def cached_masks_flattened(env: ManagerBasedEnv):
+    result = torch.zeros(env.num_envs, 1, 224, 224).to(env.device)
+    if hasattr(env, "_cached_masks"):
+        result = env._cached_masks
+    return result.flatten(start_dim=1)
