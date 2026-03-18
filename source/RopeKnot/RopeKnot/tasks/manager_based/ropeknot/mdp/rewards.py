@@ -63,7 +63,9 @@ class ResNet18_Features(nn.Module):
 
 feature_encoder = ResNet18_Features()
 feature_encoder.eval()
-reward_model = torch.jit.load("segmentation3.pt")
+segmentation_model = torch.jit.load("segmentation3.pt")
+segmentation_model.eval()
+reward_model = torch.jit.load("reward.pt")
 reward_model.eval()
 
 
@@ -77,6 +79,7 @@ def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Te
     
     with torch.no_grad():
         feature_encoder.to(model_device)
+        segmentation_model.to(model_device)
         # move the image to the model device
         image_proc = data.to(model_device)
         # permute the image to (num_envs, channel, height, width)
@@ -90,71 +93,21 @@ def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Te
         image_features = feature_encoder(image_proc)  # (x0, x1, x2, x3, x4).
         env._cached_image_features = image_features
 
-        reward_model.to(model_device)
-        masks = torch.sigmoid(reward_model(*image_features))
-        
-
-        rewards = torch.zeros(env.num_envs, device=env.device)
+        masks = torch.sigmoid(segmentation_model(*image_features))
+        if hasattr(env, "_last_masks"):
+            beta = 0.85
+            masks = (1 - beta) * masks + beta * env._last_masks
+        env._last_masks = masks
+        rewards = reward_model(masks)
         env._cached_masks = masks
 
         last_rewards = torch.zeros(env.num_envs, device=env.device)
         if hasattr(env, "last_rewards"):
             last_rewards = env.last_rewards
-        beta = 0.75
+        beta = 0.0
         result = (1 - beta) * rewards + beta * last_rewards
         env.last_rewards = result
         return result
-
-
-"""def close_to_mask(env, camera_cfg: SceneEntityCfg, ee_cfg: SceneEntityCfg):
-    mask = env._cached_masks
-
-    N, C, H, W = mask.shape
-
-    camera: TiledCamera = env.scene[camera_cfg.name]
-    depth = camera.data.output["depth"]
-
-    mask_flat = mask.view(N, -1)
-    depth_flat = depth.view(N, -1)
-
-    num_samples = 64
-
-    rand_idx = torch.randint(
-        0, H * W,
-        (N, num_samples),
-        device=mask.device
-    )
-
-    mask_samples = torch.gather(mask_flat, 1, rand_idx)
-    depth_samples = torch.gather(depth_flat, 1, rand_idx)
-    
-    v = rand_idx // W
-    u = rand_idx % W
-
-    K = camera.data.intrinsic_matrices
-
-    fx = K[:,0,0][:,None]
-    fy = K[:,1,1][:,None]
-    cx = K[:,0,2][:,None]
-    cy = K[:,1,2][:,None]
-
-    z = depth_samples
-
-    x = (u - cx) * z / fx # (B,N)
-    y = (v - cy) * z / fy
-    local_points = torch.stack((x, y, z), dim=2)  # expect (B, N, 3)
-
-    camera_pos = camera.data.pos_w
-    camera_quat = camera.data.quat_w_world
-    points_world = transform_points(local_points, camera_pos, camera_quat) # (B, N, 3)
-
-    robot = env.scene[ee_cfg.name]
-    ee_cfg.resolve(env.scene)
-    ee_pos = robot.data.body_pos_w[:, ee_cfg.body_ids[0]]  # (B, 3)
-    ee_pos_expanded = ee_pos.unsqueeze(1)  # (B, 1, 3)
-    distances = torch.norm(points_world - ee_pos_expanded, dim=-1)  # (B, N)
-    min_dist = distances.min(dim=1).values  # (B,)
-    return min_dist"""
 
 
 def close_to_mask(env, camera_cfg: SceneEntityCfg, ee_cfg: SceneEntityCfg):

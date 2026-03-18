@@ -20,6 +20,8 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaacsim.core.prims import XFormPrim
 from isaaclab.assets import RigidObjectCfg, AssetBase
+from isaaclab.markers import VisualizationMarkersCfg, VisualizationMarkers
+from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR, ISAAC_NUCLEUS_DIR
 from . import mdp
 from math import pi
 import numpy as np
@@ -52,8 +54,8 @@ UR5e_ROBOTIQ_CFG = ArticulationCfg(
     init_state=ArticulationCfg.InitialStateCfg(
         joint_pos={
             "shoulder_pan_joint": 0,
-            "shoulder_lift_joint": -50.0 / 180.0 * pi,
-            "elbow_joint": 50.0 / 180 * pi,
+            "shoulder_lift_joint": -75.0 / 180.0 * pi,
+            "elbow_joint": 75.0 / 180 * pi,
             "wrist_1_joint": -90.0 / 180 * pi,
             "wrist_2_joint": -90.0 / 180 * pi,
             "wrist_3_joint": 0.0,
@@ -126,7 +128,7 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     tiled_camera: TiledCameraCfg = TiledCameraCfg(
         prim_path="/World/envs/env_.*/Camera",
         offset=TiledCameraCfg.OffsetCfg(pos=(1.2, 0.0, 1.0), rot=(-3.6920e-08, -3.8268e-01, -3.2020e-08,  9.2388e-01), convention="world"),
-        data_types=["rgb"],
+        data_types=["rgb", "depth"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
         ),
@@ -190,9 +192,10 @@ class ObservationsCfg:
     class PolicyCfg(ObsGroup):
         """Observations for policy group."""
 
-        image_feat = ObsTerm(func=mdp.cached_image_features_resnet18)
+        #image_feat = ObsTerm(func=mdp.cached_image_features_resnet18)
         joint_pos = ObsTerm(func=mdp.joint_pos_rel)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel)
+        mask = ObsTerm(func=mdp.cached_masks_flattened)
 
         # eef_pos = ObsTerm(func=mdp.ee_frame_pos)
         # eef_quat = ObsTerm(func=mdp.ee_frame_quat)
@@ -235,18 +238,18 @@ class EventCfg:
         },
     )
 
-    # hide_robot = EventTerm(
-    #     func=hide_robot,
-    #     mode="reset",
-    #     params={}
-    # )
+    """hide_robot = EventTerm(
+        func=hide_robot,
+        mode="reset",
+        params={}
+    )"""
 
     randomize_rope_joint_state = EventTerm(
         func=mdp.randomize_rope_joints,
         mode="reset",
         params={
             "angle_min": 1.4,
-            "angle_max": 1.6,
+            "angle_max": 1.41,
             "capsule_subpath": "/capsule_.*",
             "rope_path": "Rope/Rope"
         },
@@ -260,7 +263,7 @@ class RewardsCfg:
     # (1) Constant running reward
     #alive = RewTerm(func=mdp.is_alive, weight=1.0)
     # (2) Failure penalty
-    terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
+    #terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
 
     step_penalty = RewTerm(
         func=mdp.step_penalty,
@@ -271,9 +274,14 @@ class RewardsCfg:
         "camera_cfg": SceneEntityCfg("tiled_camera"),
     })
 
-    mask_change = RewTerm(
+    close_to_mask = RewTerm(func=mdp.close_to_mask, weight=0.2, params={
+        "camera_cfg": SceneEntityCfg("tiled_camera"),
+        "ee_cfg": SceneEntityCfg("robot", body_names=["left_gripper"])
+    })
+
+    """mask_change = RewTerm(
         func=mdp.mask_change, weight=0.01
-    )
+    )"""
 
     # The Action Penalty
     action_rate = RewTerm(
@@ -285,14 +293,23 @@ class RewardsCfg:
     # Optional: Penalty for change in actions (smoothness)
     action_control_glitch = RewTerm(
         func=mdp.action_rate_l2, 
-        weight=-0.01, 
+        weight=-0.05, 
         params={}
     )
 
     joint_velocities = RewTerm(
         func=mdp.joint_vel_l2,
-        weight=-1e-2,
+        weight=-1e-1,
         params={}
+    )
+
+    ee_distance = RewTerm(
+        func=mdp.ee_target_distance,
+        weight=0.05,
+        params={
+            "ee_cfg": SceneEntityCfg("robot", body_names=["left_gripper"]),
+            "target_cfg": SceneEntityCfg("rope"),
+        },
     )
 
 @configclass
@@ -301,7 +318,7 @@ class TerminationsCfg:
 
     # (1) Time out
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
-
+    finished = DoneTerm(func=mdp.done)
 
 ##
 # Environment configuration
@@ -309,7 +326,7 @@ class TerminationsCfg:
 
 
 from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
-
+import torch
 
 @configclass
 class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
@@ -324,7 +341,7 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
-
+    
     # Post initialization
     def __post_init__(self) -> None:
         """Post initialization."""
@@ -338,6 +355,21 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 1 / 120
         np.random.seed(self.seed)
 
+        
+        #self.markers = VisualizationMarkers(markers_cfg)
+
+        """marker_cfg = VisualizationMarkersCfg(
+                prim_path="/Visuals/myMarkers",
+                markers={
+                    "frame": sim_utils.UsdFileCfg(
+                        usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/frame_prim.usd",
+                        scale=(0.5, 0.5, 0.5),
+                    ),
+                },
+            )
+        marker_orientations = torch.tensor([[1.0, 0.0, 0.0, 0.0]])
+        self.markers = VisualizationMarkers(marker_cfg)
+        self.markers.visualize(torch.tensor([[1.0, 1.0,]]), marker_orientations)"""
 
         self.sim.render_interval = self.decimation
         self.teleop_devices = DevicesCfg(
