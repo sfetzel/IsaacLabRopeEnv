@@ -248,8 +248,8 @@ class EventCfg:
         func=mdp.randomize_rope_joints,
         mode="reset",
         params={
-            "angle_min": 1.4,
-            "angle_max": 1.41,
+            "angle_min": 1.2,
+            "angle_max": 1.71,
             "capsule_subpath": "/capsule_.*",
             "rope_path": "Rope/Rope"
         },
@@ -260,21 +260,22 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    # (1) Constant running reward
-    #alive = RewTerm(func=mdp.is_alive, weight=1.0)
-    # (2) Failure penalty
-    #terminating = RewTerm(func=mdp.is_terminated, weight=-2.0)
+    # Reward for terminating early.
+    terminating = RewTerm(func=mdp.is_terminated, weight=2.0)
 
     step_penalty = RewTerm(
         func=mdp.step_penalty,
         weight=-0.1,
     )
 
-    model = RewTerm(func=mdp.model_reward, weight=1.0, params={
+    model = RewTerm(func=mdp.model_reward, weight=5.0, params={
         "camera_cfg": SceneEntityCfg("tiled_camera"),
     })
 
-    close_to_mask = RewTerm(func=mdp.close_to_mask, weight=0.2, params={
+    # discourage the robot from hiding the rope.
+    mask_size = RewTerm(func=mdp.mask_size, weight=2.0)
+
+    close_to_mask = RewTerm(func=mdp.close_to_mask, weight=0.5, params={
         "camera_cfg": SceneEntityCfg("tiled_camera"),
         "ee_cfg": SceneEntityCfg("robot", body_names=["left_gripper"])
     })
@@ -286,31 +287,28 @@ class RewardsCfg:
     # The Action Penalty
     action_rate = RewTerm(
         func=mdp.action_l2,
-        weight=-1e-2, # Negative weight to penalize
+        weight=-5e-1, # Negative weight to penalize
         params={}
     )
     
-    # Optional: Penalty for change in actions (smoothness)
+    # Penalty for change in actions (smoothness)
     action_control_glitch = RewTerm(
-        func=mdp.action_rate_l2, 
-        weight=-0.05, 
+        func=mdp.action_rate_l2,
+        weight=-0.5,
         params={}
     )
 
     joint_velocities = RewTerm(
         func=mdp.joint_vel_l2,
-        weight=-1e-1,
+        weight=-5e-1,
         params={}
     )
 
-    ee_distance = RewTerm(
-        func=mdp.ee_target_distance,
-        weight=0.05,
-        params={
-            "ee_cfg": SceneEntityCfg("robot", body_names=["left_gripper"]),
-            "target_cfg": SceneEntityCfg("rope"),
-        },
+    ee_orientation_action_penalty = RewTerm(
+        func=mdp.ee_orientation_action_penalty,
+        weight=-1.0,
     )
+
 
 @configclass
 class TerminationsCfg:
@@ -332,7 +330,7 @@ import torch
 class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: RopeknotSceneCfg = RopeknotSceneCfg(
-        num_envs=128, env_spacing=2.0, 
+        num_envs=128, env_spacing=2.0,
     )
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
@@ -346,13 +344,13 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self) -> None:
         """Post initialization."""
         # general settings
-        self.decimation = 5
+        self.decimation = 2
         self.episode_length_s = 5
         self.max_episode_length = 8
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)
         # simulation settings
-        self.sim.dt = 1 / 120
+        self.sim.dt = 1 / 60
         np.random.seed(self.seed)
 
         

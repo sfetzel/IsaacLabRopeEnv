@@ -56,14 +56,14 @@ class ResNet18_Features(nn.Module):
         x1 = self.enc1(x1)     # 64, 56x56
         x2 = self.enc2(x1)     # 128, 28x28
         x3 = self.enc3(x2)     # 256, 14x14
-        x4 = self.enc4(x3)     # 512, 7x7
+        #x4 = self.enc4(x3)     # 512, 7x7
 
-        return x0, x1, x2, x3, x4
+        return x0, x1, x2, x3, None
 
 
 feature_encoder = ResNet18_Features()
 feature_encoder.eval()
-segmentation_model = torch.jit.load("segmentation3.pt")
+segmentation_model = torch.jit.load("segmentation5.pt")
 segmentation_model.eval()
 reward_model = torch.jit.load("reward.pt")
 reward_model.eval()
@@ -76,7 +76,7 @@ def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Te
     data = camera.data.output["rgb"]  # (envs, H, W, C) in format (0,255)
     
     model_device = env.device
-    
+
     with torch.no_grad():
         feature_encoder.to(model_device)
         segmentation_model.to(model_device)
@@ -95,7 +95,7 @@ def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Te
 
         masks = torch.sigmoid(segmentation_model(*image_features))
         if hasattr(env, "_last_masks"):
-            beta = 0.85
+            beta = 0.1
             masks = (1 - beta) * masks + beta * env._last_masks
         env._last_masks = masks
         rewards = reward_model(masks)
@@ -107,7 +107,16 @@ def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Te
         beta = 0.0
         result = (1 - beta) * rewards + beta * last_rewards
         env.last_rewards = result
+
         return result
+
+
+def mask_size(env):
+    mask = env._cached_masks
+
+    masks_flattened = mask.flatten(start_dim=1)
+
+    return masks_flattened.mean(dim=1)
 
 
 def close_to_mask(env, camera_cfg: SceneEntityCfg, ee_cfg: SceneEntityCfg):
@@ -258,3 +267,17 @@ def ee_target_distance(env, ee_cfg: SceneEntityCfg, target_cfg: SceneEntityCfg):
     exp_dist = torch.exp(-clamped_dist * 2)
     # penalty
     return exp_dist
+
+
+def ee_orientation_action_penalty(env: ManagerBasedRLEnv):
+    """Penalize roll/pitch angular velocity commands."""
+
+    actions = env.action_manager.action
+
+    # assuming action = [vx, vy, vz, wx, wy, wz]
+    angular_vel = actions[:, 3:6]
+
+    # penalize roll and pitch only
+    penalty = torch.sum(torch.square(angular_vel[:, 0:2]), dim=-1)
+
+    return penalty

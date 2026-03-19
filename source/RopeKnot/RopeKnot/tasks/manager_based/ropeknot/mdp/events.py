@@ -1,19 +1,9 @@
 
 from __future__ import annotations
 
-import math
-import random
 import torch
 from typing import TYPE_CHECKING
-
-from isaacsim.core.utils.extensions import enable_extension
-
-import isaaclab.utils.math as math_utils
-from isaaclab.assets import Articulation, AssetBase, AssetBaseCfg
-from isaaclab.managers import SceneEntityCfg
 from isaacsim.core.prims import RigidPrim
-import isaaclab.sim as sim_utils
-from isaaclab.utils.math import quat_mul
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
@@ -36,6 +26,7 @@ def randomize_rope_joints(
     angle_max: float,
     capsule_subpath: str,
     rope_path: str,
+    capsule_distance: float = 0.02,
 ):
     """
     Randomizes the rope pose by modifying the "z" DOF rotation.
@@ -48,19 +39,32 @@ def randomize_rope_joints(
         prims = RigidPrim(prim_paths_expr=f"/World/envs/env_.*/{rope_path}" + capsule_subpath, name="rigid_prim_view")
         env._cache_rope_rigidprim = prims
 
+    num_envs = len(env_ids)
     ropes = [f"/World/envs/env_{id}/{rope_path}" for id in env_ids]
-    all_pos, all_orient = prims.get_local_poses()
+    paths = prims.prim_paths
 
-    for rope_path in ropes:
-        ids = [i for i in range(prims.count) if prims.prim_paths[i].startswith(rope_path)]
-        pos = all_pos[ids]
-        orient = all_orient[ids]
+    all_pos, all_orient = None, None
+    d = capsule_distance  # distance between capsules.
+    angles = torch.distributions.uniform.Uniform(torch.tensor([angle_min]), torch.tensor([angle_max]))
 
-        d = torch.norm(pos[:-1, :] - pos[1:, :], dim=1).mean()
+    target_ids = []
+    N = None  # number of capsules per rope.
+    for rope_index, rope_path in enumerate(ropes):
+
+        ids = [i for i in range(prims.count) if paths[i].startswith(rope_path)]  # ids in prim of this rope.
+
+        if all_pos is None or all_orient is None:
+            N = len(ids)  # number of capsules per rope.
+            all_orient = torch.zeros((num_envs * N, 4))
+            all_pos = torch.zeros((num_envs * N, 3))
+
+        start_idx = rope_index * N  # start index in all_orient, all_pos tensors.
+        end_idx = (rope_index + 1) * N
+        pos = all_pos[start_idx:end_idx]
+        orient = all_orient[start_idx:end_idx]
 
         center = pos.shape[0] // 2
-        angles = torch.distributions.uniform.Uniform(torch.tensor([angle_min]), torch.tensor([angle_max]))
-        bend(d, angles.sample().item(), pos[(center + 1):, :], orient[(center + 1):, :])
+        bend(d, angles.sample().item(), pos[center:, :], orient[center:, :])
         bend(-d, -angles.sample().item(), pos[:center, :], orient[:center, :])
         pos[center, :2] *= 0  # reset center position
 
@@ -68,8 +72,9 @@ def randomize_rope_joints(
         pos[:center, :] = torch.flip(pos[:center, :], dims=(0,))
         orient[:center, :] = torch.flip(orient[:center, :], dims=(0,))
 
-        all_pos[ids] = pos
-        all_orient[ids] = orient
-    
-    prims.set_local_poses(all_pos, all_orient)
-    prims.set_velocities(prims.get_velocities() * 0.0)
+        all_pos[start_idx:end_idx, :] = pos
+        all_orient[start_idx:end_idx, :] = orient
+        target_ids.extend(ids)
+
+    prims.set_local_poses(all_pos, all_orient, indices=target_ids)
+    prims.set_velocities(torch.zeros((num_envs * N, 6)), indices=target_ids)
