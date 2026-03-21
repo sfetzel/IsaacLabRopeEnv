@@ -78,3 +78,11 @@ def randomize_rope_joints(
 
     prims.set_local_poses(all_pos, all_orient, indices=target_ids)
     prims.set_velocities(torch.zeros((num_envs * N, 6)), indices=target_ids)
+
+
+def clean_cache(env: ManagerBasedEnv, env_ids: torch.Tensor):
+    if hasattr(env, "_cached_mask_size"):
+        env._cached_mask_size[env_ids] = 0.0
+    if hasattr(env, "_cached_masks"):
+        env._cached_masks[env_ids] *= 0.0
+

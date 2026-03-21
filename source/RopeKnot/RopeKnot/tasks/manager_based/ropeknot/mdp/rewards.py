@@ -63,9 +63,9 @@ class ResNet18_Features(nn.Module):
 
 feature_encoder = ResNet18_Features()
 feature_encoder.eval()
-segmentation_model = torch.jit.load("segmentation5.pt")
+segmentation_model = torch.jit.load("segmentation2.pt")
 segmentation_model.eval()
-reward_model = torch.jit.load("reward.pt")
+reward_model = torch.jit.load("reward-8.pt")
 reward_model.eval()
 
 
@@ -95,7 +95,7 @@ def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Te
 
         masks = torch.sigmoid(segmentation_model(*image_features))
         if hasattr(env, "_last_masks"):
-            beta = 0.1
+            beta = 0.9
             masks = (1 - beta) * masks + beta * env._last_masks
         env._last_masks = masks
         rewards = reward_model(masks)
@@ -114,9 +114,16 @@ def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Te
 def mask_size(env):
     mask = env._cached_masks
 
+    if not hasattr(env, "_cached_mask_size"):
+        env._cached_mask_size = env._cached_masks.flatten(start_dim=1).sum(dim=1)
+
+    # check which environments have been reset and reset their mask.
+    masks_to_update = env._cached_mask_size == 0.0
+    env._cached_mask_size[masks_to_update] = env._cached_masks[masks_to_update].flatten(start_dim=1).sum(dim=1)
+
     masks_flattened = mask.flatten(start_dim=1)
 
-    return masks_flattened.mean(dim=1)
+    return masks_flattened.sum(dim=1) / env._cached_mask_size
 
 
 def close_to_mask(env, camera_cfg: SceneEntityCfg, ee_cfg: SceneEntityCfg):
@@ -224,7 +231,7 @@ def close_to_mask(env, camera_cfg: SceneEntityCfg, ee_cfg: SceneEntityCfg):
     )
     min_dist = distances.min(dim=1).values
 
-    reward = torch.exp(-3 * min_dist)
+    reward = torch.exp(-2 * min_dist)
 
     return reward
 
