@@ -243,13 +243,13 @@ class ActionsCfg:
 
     arm_action = DifferentialInverseKinematicsActionCfg(
         asset_name="robot",
-        #class_type=PositionWithFixedOrientationIKAction,
+        class_type=PositionWithFixedOrientationIKAction,
         joint_names=[".*_joint"],
         body_name="base_link_0",  # base link from hand-e
         controller=DifferentialIKControllerCfg(
             # use (pose and relative mode for teleoperation)
             # use (pose, class and absolute mode for training)
-            command_type="pose", use_relative_mode=True, ik_method="dls"
+            command_type="pose", use_relative_mode=False, ik_method="dls"
         ),
         #scale=[[1.0, 1.0, 1.0, 0.1, 0.1, 1.0]],
         scale=1.0,
