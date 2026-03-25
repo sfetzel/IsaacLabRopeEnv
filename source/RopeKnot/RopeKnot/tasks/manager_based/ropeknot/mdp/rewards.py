@@ -95,7 +95,7 @@ def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Te
 
         masks = torch.sigmoid(segmentation_model(*image_features))
         if hasattr(env, "_last_masks"):
-            beta = 0.9
+            beta = 0.95
             masks = (1 - beta) * masks + beta * env._last_masks
         env._last_masks = masks
         rewards = reward_model(masks)
@@ -358,3 +358,18 @@ def desired_contacts_filtered(env, sensor_cfg: SceneEntityCfg, threshold: float 
     )
     zero_contact = (~contacts).all(dim=1)
     return 1.0 * zero_contact
+
+
+def occlusion_cam(env, camera_cfg):
+    camera: TiledCamera = env.scene[camera_cfg.name]
+    bb_2d_data = camera.data.output["bounding_box_2d_loose_fast"]
+    #print(camera.data.info)
+    occlusion = bb_2d_data[..., -1]        # shape: (B, N)
+    valid_mask = occlusion >= 0
+
+    # mean
+    mean_occlusion = (occlusion * valid_mask).sum(dim=1) / valid_mask.sum(dim=1).clamp(min=1)
+
+    #mean_occlusion = occlusion.max(dim=1).values  # shape: (B,)
+    #print(mean_occlusion)
+    return mean_occlusion

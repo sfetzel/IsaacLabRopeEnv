@@ -141,18 +141,18 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     )
 
     # unfortunately semantic filtering does not work per camera.
-    """rope_semantic_camera: CameraCfg = CameraCfg(
+    rope_semantic_camera: CameraCfg = CameraCfg(
         prim_path="/World/envs/env_.*/RopeCamera",
         offset=CameraCfg.OffsetCfg(pos=(1.2, 0.0, 1.0), rot=(-3.6920e-08, -3.8268e-01, -3.2020e-08,  9.2388e-01), convention="world"),
-        data_types=["semantic_segmentation"],
+        data_types=["bounding_box_2d_loose_fast"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
         ),
         width=224,
         height=224,
         colorize_semantic_segmentation=False,
-        semantic_filter="class : rope"
-    )"""
+        semantic_filter="rope : capsule"
+    )
 
     contact_sensor_left = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/ee_link/left_gripper",
@@ -243,13 +243,13 @@ class ActionsCfg:
 
     arm_action = DifferentialInverseKinematicsActionCfg(
         asset_name="robot",
-        class_type=PositionWithFixedOrientationIKAction,
+        #class_type=PositionWithFixedOrientationIKAction,
         joint_names=[".*_joint"],
         body_name="base_link_0",  # base link from hand-e
         controller=DifferentialIKControllerCfg(
             # use (pose and relative mode for teleoperation)
             # use (pose, class and absolute mode for training)
-            command_type="pose", use_relative_mode=False, ik_method="dls"
+            command_type="pose", use_relative_mode=True, ik_method="dls"
         ),
         #scale=[[1.0, 1.0, 1.0, 0.1, 0.1, 1.0]],
         scale=1.0,
@@ -361,10 +361,20 @@ class RewardsCfg:
     """Reward terms for the MDP."""
 
     # Reward for terminating early.
-    terminating = RewTerm(func=mdp.is_terminated, weight=1.0)
+    time_penalty = RewTerm(func=mdp.is_alive, weight=-0.1)
 
     model = RewTerm(func=mdp.model_reward, weight=1.0, params={
         "camera_cfg": SceneEntityCfg("tiled_camera"),
+    })
+
+    occlusion = RewTerm(func=mdp.occlusion_cam, weight=-0.5, params={
+        "camera_cfg": SceneEntityCfg("rope_semantic_camera")
+    })
+
+    # a small reward so the robot approaches the rope.
+    target_distance = RewTerm(func=mdp.ee_target_distance, weight=-0.01, params={
+        "ee_cfg": SceneEntityCfg("robot", body_names=["left_gripper"]),
+        "target_cfg": SceneEntityCfg("rope")
     })
 
     """rope_occlusion = RewTerm(func=mdp.occlusion, weight=0.5, params={
