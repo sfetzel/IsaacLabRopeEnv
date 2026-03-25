@@ -157,14 +157,12 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     contact_sensor_left = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/ee_link/left_gripper",
         update_period=0.0,
-        history_length=6,
         debug_vis=True,
         filter_prim_paths_expr=["{ENV_REGEX_NS}" + f"/Rope/Rope/capsule_{i}" for i in range(60)],
     )
     contact_sensor_right = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/ee_link/right_gripper",
         update_period=0.0,
-        history_length=6,
         debug_vis=True,
         filter_prim_paths_expr=["{ENV_REGEX_NS}" + f"/Rope/Rope/capsule_{i}" for i in range(60)],
     )
@@ -202,6 +200,10 @@ class PositionWithFixedOrientationIKAction(task_space_actions.DifferentialInvers
         self._scale[:] = torch.tensor(self.cfg.scale, device=self.device)
         self._desired_orientation = torch.zeros((self.num_envs, 4), device=self.device)
         self._desired_orientation[:] = torch.tensor([0.4921, -0.4994, 0.4992, -0.5093], device=self.device)
+        # change in rad/s
+        max_change = 120.0 / 180.0 * torch.pi
+        time_step = env.physics_dt * env.cfg.sim.render_interval
+        self.max_delta = max_change * time_step
 
     @property
     def action_dim(self):
@@ -215,6 +217,25 @@ class PositionWithFixedOrientationIKAction(task_space_actions.DifferentialInvers
         full_actions = torch.cat((actions, self._desired_orientation), dim=1)
         return super().process_actions(full_actions)
 
+    def apply_actions(self):
+        # obtain quantities from simulation
+        ee_pos_curr, ee_quat_curr = self._compute_frame_pose()
+        joint_pos = self._asset.data.joint_pos[:, self._joint_ids]
+        # compute the delta in joint-space
+        if ee_quat_curr.norm() != 0:
+            jacobian = self._compute_frame_jacobian()
+            joint_pos_des = self._ik_controller.compute(ee_pos_curr, ee_quat_curr, jacobian, joint_pos)
+        else:
+            joint_pos_des = joint_pos.clone()
+        
+        delta_q = joint_pos_des - joint_pos
+        delta_q = torch.clamp(delta_q, -self.max_delta, self.max_delta)
+
+        new_joint_pos_des = joint_pos + delta_q
+
+        # set the joint position command
+        self._asset.set_joint_position_target(new_joint_pos_des, self._joint_ids)
+
 
 @configclass
 class ActionsCfg:
@@ -222,13 +243,13 @@ class ActionsCfg:
 
     arm_action = DifferentialInverseKinematicsActionCfg(
         asset_name="robot",
-        #class_type=PositionWithFixedOrientationIKAction,
+        class_type=PositionWithFixedOrientationIKAction,
         joint_names=[".*_joint"],
         body_name="base_link_0",  # base link from hand-e
         controller=DifferentialIKControllerCfg(
             # use (pose and relative mode for teleoperation)
             # use (pose, class and absolute mode for training)
-            command_type="pose", use_relative_mode=True, ik_method="dls"
+            command_type="pose", use_relative_mode=False, ik_method="dls"
         ),
         #scale=[[1.0, 1.0, 1.0, 0.1, 0.1, 1.0]],
         scale=1.0,
@@ -352,7 +373,7 @@ class RewardsCfg:
     })"""
 
     # discourage the robot from hiding the rope.
-    mask_size = RewTerm(func=mdp.mask_size, weight=1.0)
+    #mask_size = RewTerm(func=mdp.mask_size, weight=0.)
 
     """close_to_mask = RewTerm(func=mdp.close_to_mask, weight=1.0, params={
         "camera_cfg": SceneEntityCfg("tiled_camera"),
@@ -361,7 +382,7 @@ class RewardsCfg:
 
     left_gripper_contact = RewTerm(
         func=mdp.desired_contacts_filtered,  # returns 1.0 when no contact and 0.0 when contact
-        weight=-0.1,
+        weight=-0.5,
         params={
             "sensor_cfg": SceneEntityCfg("contact_sensor_left"),
             "threshold": 0
@@ -370,7 +391,7 @@ class RewardsCfg:
 
     right_gripper_contact = RewTerm(
         func=mdp.desired_contacts_filtered,
-        weight=-0.1,
+        weight=-0.5,
         params={
             "sensor_cfg": SceneEntityCfg("contact_sensor_right"),
             "threshold": 0
@@ -392,12 +413,6 @@ class RewardsCfg:
     action_control_glitch = RewTerm(
         func=mdp.action_rate_l2,
         weight=-0.2,
-        params={}
-    )
-
-    joint_velocities = RewTerm(
-        func=mdp.joint_vel_l2,
-        weight=-5e-1,
         params={}
     )
 
