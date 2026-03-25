@@ -14,7 +14,7 @@ from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.sensors import TiledCamera, TiledCameraCfg
+from isaaclab.sensors import TiledCamera, TiledCameraCfg, CameraCfg, Camera
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
@@ -22,6 +22,7 @@ from isaacsim.core.prims import XFormPrim
 from isaaclab.assets import RigidObjectCfg, AssetBase
 from isaaclab.markers import VisualizationMarkersCfg, VisualizationMarkers
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR, ISAAC_NUCLEUS_DIR
+from isaaclab.sensors.contact_sensor import ContactSensorCfg
 from . import mdp
 from math import pi
 import numpy as np
@@ -49,7 +50,8 @@ UR5e_ROBOTIQ_CFG = ArticulationCfg(
             solver_position_iteration_count=16,
             solver_velocity_iteration_count=1,
         ),
-        activate_contact_sensors=False,
+        activate_contact_sensors=True,
+        semantic_tags=[("class", "robot")]
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         joint_pos={
@@ -121,6 +123,7 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Rope",
         spawn=sim_utils.UsdFileCfg(
             usd_path=f"{os.path.dirname(os.path.abspath(__file__))}/assets/rope.usd",
+            semantic_tags=[("class", "rope")]
         ),
         init_state=AssetBaseCfg.InitialStateCfg(pos=(0.6, 0.0, 0.01), rot=(0.7071067, 0, 0, 0.7071067)),
     )
@@ -128,14 +131,43 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     tiled_camera: TiledCameraCfg = TiledCameraCfg(
         prim_path="/World/envs/env_.*/Camera",
         offset=TiledCameraCfg.OffsetCfg(pos=(1.2, 0.0, 1.0), rot=(-3.6920e-08, -3.8268e-01, -3.2020e-08,  9.2388e-01), convention="world"),
-        data_types=["rgb", "depth"],
+        data_types=["rgb"], #, "semantic_segmentation"
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
         ),
         width=224,
         height=224,
+        colorize_semantic_segmentation=False,
     )
 
+    # unfortunately semantic filtering does not work per camera.
+    """rope_semantic_camera: CameraCfg = CameraCfg(
+        prim_path="/World/envs/env_.*/RopeCamera",
+        offset=CameraCfg.OffsetCfg(pos=(1.2, 0.0, 1.0), rot=(-3.6920e-08, -3.8268e-01, -3.2020e-08,  9.2388e-01), convention="world"),
+        data_types=["semantic_segmentation"],
+        spawn=sim_utils.PinholeCameraCfg(
+            focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
+        ),
+        width=224,
+        height=224,
+        colorize_semantic_segmentation=False,
+        semantic_filter="class : rope"
+    )"""
+
+    contact_sensor_left = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/ee_link/left_gripper",
+        update_period=0.0,
+        history_length=6,
+        debug_vis=True,
+        filter_prim_paths_expr=["{ENV_REGEX_NS}" + f"/Rope/Rope/capsule_{i}" for i in range(60)],
+    )
+    contact_sensor_right = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/ee_link/right_gripper",
+        update_period=0.0,
+        history_length=6,
+        debug_vis=True,
+        filter_prim_paths_expr=["{ENV_REGEX_NS}" + f"/Rope/Rope/capsule_{i}" for i in range(60)],
+    )
 
 ##
 # MDP settings
@@ -150,6 +182,39 @@ from isaaclab_tasks.manager_based.manipulation.stack.mdp.franka_stack_events imp
     randomize_joint_by_gaussian_offset,
 )
 
+import torch
+from isaaclab.envs.mdp.actions import task_space_actions
+from isaaclab.envs import ManagerBasedEnv
+
+
+class PositionWithFixedOrientationIKAction(task_space_actions.DifferentialInverseKinematicsAction):
+    """Differential IK action that allows translation + yaw only."""
+
+    def __init__(self, cfg: DifferentialInverseKinematicsActionCfg, env: ManagerBasedEnv):
+        # initialize the action term
+        super().__init__(cfg, env)
+        # create tensors for raw and processed actions
+        self._raw_actions = torch.zeros(self.num_envs, 7, device=self.device)
+        self._processed_actions = torch.zeros_like(self.raw_actions)
+
+        # save the scale as tensors
+        self._scale = torch.zeros((self.num_envs, 7), device=self.device)
+        self._scale[:] = torch.tensor(self.cfg.scale, device=self.device)
+        self._desired_orientation = torch.zeros((self.num_envs, 4), device=self.device)
+        self._desired_orientation[:] = torch.tensor([0.4921, -0.4994, 0.4992, -0.5093], device=self.device)
+
+    @property
+    def action_dim(self):
+        # expose only 3 actions to the policy
+        return 3
+
+    def process_actions(self, actions: torch.Tensor):
+        """
+        Convert [vx, vy, vz] -> [vx, vy, vz, w, x, y, z]
+        """
+        full_actions = torch.cat((actions, self._desired_orientation), dim=1)
+        return super().process_actions(full_actions)
+
 
 @configclass
 class ActionsCfg:
@@ -157,11 +222,15 @@ class ActionsCfg:
 
     arm_action = DifferentialInverseKinematicsActionCfg(
         asset_name="robot",
+        #class_type=PositionWithFixedOrientationIKAction,
         joint_names=[".*_joint"],
-        body_name="wrist_3_link",
+        body_name="base_link_0",  # base link from hand-e
         controller=DifferentialIKControllerCfg(
+            # use (pose and relative mode for teleoperation)
+            # use (pose, class and absolute mode for training)
             command_type="pose", use_relative_mode=True, ik_method="dls"
         ),
+        #scale=[[1.0, 1.0, 1.0, 0.1, 0.1, 1.0]],
         scale=1.0,
         body_offset=DifferentialInverseKinematicsActionCfg.OffsetCfg(
             pos=[0.0, 0.0, 0.0]
@@ -193,8 +262,12 @@ class ObservationsCfg:
         """Observations for policy group."""
 
         #image_feat = ObsTerm(func=mdp.cached_image_features_resnet18)
-        joint_pos = ObsTerm(func=mdp.joint_pos_rel)
-        joint_vel = ObsTerm(func=mdp.joint_vel_rel)
+        #joint_pos = ObsTerm(func=mdp.joint_pos_rel)
+        #joint_vel = ObsTerm(func=mdp.joint_vel_rel)
+        ee_pos = ObsTerm(func=mdp.body_pose_w, params={
+            "asset_cfg": SceneEntityCfg("robot", body_ids=-1)
+        })
+        current_time = ObsTerm(func=mdp.current_time_s)
         mask = ObsTerm(func=mdp.cached_masks_flattened)
 
         # eef_pos = ObsTerm(func=mdp.ee_frame_pos)
@@ -255,46 +328,70 @@ class EventCfg:
         },
     )
 
+    clean_data = EventTerm(
+        func=mdp.clean_cache,
+        mode="reset",
+        params={}
+    )
+
 
 @configclass
 class RewardsCfg:
     """Reward terms for the MDP."""
 
     # Reward for terminating early.
-    terminating = RewTerm(func=mdp.is_terminated, weight=2.0)
+    terminating = RewTerm(func=mdp.is_terminated, weight=1.0)
 
-    step_penalty = RewTerm(
-        func=mdp.step_penalty,
-        weight=-0.1,
-    )
-
-    model = RewTerm(func=mdp.model_reward, weight=5.0, params={
+    model = RewTerm(func=mdp.model_reward, weight=1.0, params={
         "camera_cfg": SceneEntityCfg("tiled_camera"),
     })
+
+    """rope_occlusion = RewTerm(func=mdp.occlusion, weight=0.5, params={
+        "camera_cfg": SceneEntityCfg("tiled_camera"),
+        "object_camera_cfg": SceneEntityCfg("rope_semantic_camera"),
+    })"""
 
     # discourage the robot from hiding the rope.
-    mask_size = RewTerm(func=mdp.mask_size, weight=2.0)
+    mask_size = RewTerm(func=mdp.mask_size, weight=1.0)
 
-    close_to_mask = RewTerm(func=mdp.close_to_mask, weight=0.5, params={
+    """close_to_mask = RewTerm(func=mdp.close_to_mask, weight=1.0, params={
         "camera_cfg": SceneEntityCfg("tiled_camera"),
         "ee_cfg": SceneEntityCfg("robot", body_names=["left_gripper"])
-    })
+    })"""
+
+    left_gripper_contact = RewTerm(
+        func=mdp.desired_contacts_filtered,  # returns 1.0 when no contact and 0.0 when contact
+        weight=-0.1,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_sensor_left"),
+            "threshold": 0
+        }
+    )
+
+    right_gripper_contact = RewTerm(
+        func=mdp.desired_contacts_filtered,
+        weight=-0.1,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_sensor_right"),
+            "threshold": 0
+        }
+    )
 
     """mask_change = RewTerm(
         func=mdp.mask_change, weight=0.01
     )"""
 
     # The Action Penalty
-    action_rate = RewTerm(
+    """action_rate = RewTerm(
         func=mdp.action_l2,
-        weight=-5e-1, # Negative weight to penalize
+        weight=-5e-2, # Negative weight to penalize
         params={}
-    )
+    )"""
     
     # Penalty for change in actions (smoothness)
     action_control_glitch = RewTerm(
         func=mdp.action_rate_l2,
-        weight=-0.5,
+        weight=-0.2,
         params={}
     )
 
@@ -304,9 +401,9 @@ class RewardsCfg:
         params={}
     )
 
-    ee_orientation_action_penalty = RewTerm(
-        func=mdp.ee_orientation_action_penalty,
-        weight=-1.0,
+    ee_orientation_penalty = RewTerm(
+        func=mdp.ee_orientation_penalty,
+        weight=-0.1,
     )
 
 
@@ -330,7 +427,7 @@ import torch
 class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: RopeknotSceneCfg = RopeknotSceneCfg(
-        num_envs=128, env_spacing=2.0,
+        num_envs=350, env_spacing=4.0,
     )
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
@@ -344,13 +441,13 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self) -> None:
         """Post initialization."""
         # general settings
-        self.decimation = 2
+        self.decimation = 3
         self.episode_length_s = 5
         self.max_episode_length = 8
         # viewer settings
         self.viewer.eye = (8.0, 0.0, 5.0)
         # simulation settings
-        self.sim.dt = 1 / 60
+        self.sim.dt = 1.0 / 120.0
         np.random.seed(self.seed)
 
         

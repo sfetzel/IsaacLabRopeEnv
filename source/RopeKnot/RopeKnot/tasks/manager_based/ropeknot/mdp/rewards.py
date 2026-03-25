@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from isaaclab.assets import Articulation
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import wrap_to_pi, transform_points
-from isaaclab.sensors import TiledCamera
+from isaaclab.sensors import TiledCamera, Camera
 from isaaclab.markers import VisualizationMarkersCfg, VisualizationMarkers
 
 if TYPE_CHECKING:
@@ -275,16 +275,86 @@ def ee_target_distance(env, ee_cfg: SceneEntityCfg, target_cfg: SceneEntityCfg):
     # penalty
     return exp_dist
 
+import torch
+from isaaclab.managers import SceneEntityCfg
+from isaaclab.envs import ManagerBasedRLEnv
+from isaaclab.utils.math import quat_mul, quat_conjugate
 
-def ee_orientation_action_penalty(env: ManagerBasedRLEnv):
-    """Penalize roll/pitch angular velocity commands."""
 
-    actions = env.action_manager.action
+def ee_orientation_penalty(
+    env: ManagerBasedRLEnv,
+    ee_cfg: SceneEntityCfg = SceneEntityCfg("robot", body_names=["wrist_3_link"]),
+):
+    """Penalize deviation from the desired downward orientation."""
 
-    # assuming action = [vx, vy, vz, wx, wy, wz]
-    angular_vel = actions[:, 3:6]
+    ee_cfg.resolve(env.scene)
+    robot = env.scene[ee_cfg.name]
 
-    # penalize roll and pitch only
-    penalty = torch.sum(torch.square(angular_vel[:, 0:2]), dim=-1)
+    # EE quaternion in world frame
+    ee_quat = robot.data.body_quat_w[:, ee_cfg.body_ids[0]]
+
+    # desired quaternion (z pointing down)
+    desired_quat = torch.tensor([0.0, -0.707, 0.707, 0.0], device=ee_quat.device)
+    desired_quat = desired_quat.unsqueeze(0).repeat(env.num_envs, 1)
+
+    # quaternion difference
+    q_err = quat_mul(desired_quat, quat_conjugate(ee_quat))
+
+    # angular distance penalty
+    penalty = 2.0 * torch.acos(torch.clamp(torch.abs(q_err[:, 3]), -1.0, 1.0))
 
     return penalty
+
+
+def occlusion(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg, object_camera_cfg: SceneEntityCfg) -> torch.Tensor:
+    camera: TiledCamera = env.scene[camera_cfg.name]
+    object_camera: Camera = env.scene[object_camera_cfg.name]
+
+    print(camera.data.info)
+    print(object_camera.data.info)
+    object_cam_info = object_camera.data.info
+    if isinstance(object_cam_info, list):
+        object_cam_info = object_cam_info[0]
+
+    id_to_labels = camera.data.info['semantic_segmentation']['idToLabels']
+    print(id_to_labels)
+    object_id = [i for i, info in id_to_labels.items() if info["class"] == "rope"]
+    result = 0.0
+
+    if len(object_id) == 0:
+        print(f"Could not find rope in semantic segmentation: {camera.data.info['semantic_segmentation']}")
+    else:
+        scene_segmentation = camera.data.output["semantic_segmentation"]  # (B, H, W, 1)
+        print(scene_segmentation.shape)
+        object_segmentation = object_camera.data.output["semantic_segmentation"]  # (B, H, W, 1); 1 is object.
+        print(object_cam_info['semantic_segmentation']['idToLabels'])
+        print(object_segmentation.shape)
+
+        scene_object_mask = (scene_segmentation == object_id)
+        object_only_mask = object_segmentation == 2
+        print(torch.unique(object_segmentation))
+
+        # Total object pixels (ground truth)
+        total_pixels = object_only_mask.sum(dim=(1, 2, 3)).float()
+
+        # Visible pixels (not occluded)
+        visible_pixels = (scene_object_mask & object_only_mask).sum(dim=(1, 2, 3)).float()
+
+        # Visibility ratio
+        result = visible_pixels / (total_pixels + 1e-6)
+
+    return result
+
+
+from isaaclab.sensors import ContactSensor
+
+
+def desired_contacts_filtered(env, sensor_cfg: SceneEntityCfg, threshold: float = 1.0) -> torch.Tensor:
+    """Penalize if none of the desired contacts are present."""
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    contacts = (
+        contact_sensor.data.force_matrix_w[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > threshold
+    )
+    zero_contact = (~contacts).all(dim=1)
+    return 1.0 * zero_contact

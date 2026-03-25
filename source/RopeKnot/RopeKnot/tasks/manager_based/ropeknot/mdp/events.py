@@ -83,6 +83,9 @@ def randomize_rope_joints(
 def clean_cache(env: ManagerBasedEnv, env_ids: torch.Tensor):
     if hasattr(env, "_cached_mask_size"):
         env._cached_mask_size[env_ids] = 0.0
+    
     if hasattr(env, "_cached_masks"):
         env._cached_masks[env_ids] *= 0.0
+    if hasattr(env, "last_rewards"):
+        env.last_rewards[env_ids] *= 0.0
 
