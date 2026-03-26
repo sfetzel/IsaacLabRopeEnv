@@ -243,6 +243,6 @@ if __name__ == "__main__":
     import omni
 
     stage = omni.usd.get_context().get_stage()
-    dem = RopeFactory(1.2)
+    dem = RopeFactory(0.8)
     dem.capsuleZ = 0.0
     print(dem.create("/World/Rope", stage))

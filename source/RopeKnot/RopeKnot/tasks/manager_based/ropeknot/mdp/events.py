@@ -27,6 +27,8 @@ def randomize_rope_joints(
     capsule_subpath: str,
     rope_path: str,
     capsule_distance: float = 0.02,
+    x_shift: float = 0.1,
+    y_shift: float = 0.1
 ):
     """
     Randomizes the rope pose by modifying the "z" DOF rotation.
@@ -45,7 +47,10 @@ def randomize_rope_joints(
 
     all_pos, all_orient = None, None
     d = capsule_distance  # distance between capsules.
+    
     angles = torch.distributions.uniform.Uniform(torch.tensor([angle_min]), torch.tensor([angle_max]))
+    x_rand = torch.distributions.uniform.Uniform(torch.tensor([-x_shift]), torch.tensor([x_shift]))
+    y_rand = torch.distributions.uniform.Uniform(torch.tensor([-y_shift]), torch.tensor([y_shift]))
 
     target_ids = []
     N = None  # number of capsules per rope.
@@ -72,6 +77,9 @@ def randomize_rope_joints(
         pos[:center, :] = torch.flip(pos[:center, :], dims=(0,))
         orient[:center, :] = torch.flip(orient[:center, :], dims=(0,))
 
+        pos[:, 0] += x_rand.sample()
+        pos[:, 1] += y_rand.sample()
+
         all_pos[start_idx:end_idx, :] = pos
         all_orient[start_idx:end_idx, :] = orient
         target_ids.extend(ids)
@@ -89,3 +97,43 @@ def clean_cache(env: ManagerBasedEnv, env_ids: torch.Tensor):
     if hasattr(env, "last_rewards"):
         env.last_rewards[env_ids] *= 0.0
 
+
+from isaaclab.managers import SceneEntityCfg
+import isaaclab.utils.math as math_utils
+from isaacsim.core.prims import XFormPrim
+
+
+def reset_asset_state_uniform(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    pose_range: dict[str, tuple[float, float]],
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+):
+    """Reset the asset root state to a random position and velocity uniformly within the given ranges.
+
+    This function randomizes the root position and velocity of the asset.
+
+    * It samples the root position from the given ranges and adds them to the default root position, before setting
+      them into the physics simulation.
+    * It samples the root orientation from the given ranges and sets them into the physics simulation.
+    * It samples the root velocity from the given ranges and sets them into the physics simulation.
+
+    The function takes a dictionary of pose and velocity ranges for each axis and rotation. The keys of the
+    dictionary are ``x``, ``y``, ``z``, ``roll``, ``pitch``, and ``yaw``. The values are tuples of the form
+    ``(min, max)``. If the dictionary does not contain a key, the position or velocity is set to zero for that axis.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: XFormPrim = env.scene[asset_cfg.name]
+    root_pos, root_quat = asset.get_world_poses()
+    # poses
+    range_list = [pose_range.get(key, (0.0, 0.0)) for key in ["x", "y", "z", "roll", "pitch", "yaw"]]
+    ranges = torch.tensor(range_list, device=env.device)
+    rand_samples = math_utils.sample_uniform(ranges[:, 0], ranges[:, 1], (len(env_ids), 6), device=env.device)
+
+    positions = env.scene.env_origins[env_ids] + rand_samples[:, 0:3]
+    print(root_quat.shape)
+    orientations_delta = math_utils.quat_from_euler_xyz(rand_samples[:, 3], rand_samples[:, 4], rand_samples[:, 5])
+    orientations = math_utils.quat_mul(root_quat, orientations_delta)
+
+    # set into the physics simulation
+    asset.set_world_poses(positions, orientations, indices=env_ids)

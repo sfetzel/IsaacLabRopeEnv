@@ -94,8 +94,16 @@ def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Te
         env._cached_image_features = image_features
 
         masks = torch.sigmoid(segmentation_model(*image_features))
+        
+        if not hasattr(env, "_cached_mask_size"):
+            env._cached_mask_size = masks.flatten(start_dim=1).sum(dim=1)
+        else:
+            # check which environments have been reset and reset their mask.
+            masks_to_update = env._cached_mask_size == 0.0
+            env._cached_mask_size[masks_to_update] = masks[masks_to_update].flatten(start_dim=1).float().sum(dim=1)
+
         if hasattr(env, "_last_masks"):
-            beta = 0.95
+            beta = 0.1
             masks = (1 - beta) * masks + beta * env._last_masks
         env._last_masks = masks
         rewards = reward_model(masks)
@@ -116,10 +124,6 @@ def mask_size(env):
 
     if not hasattr(env, "_cached_mask_size"):
         env._cached_mask_size = env._cached_masks.flatten(start_dim=1).sum(dim=1)
-
-    # check which environments have been reset and reset their mask.
-    masks_to_update = env._cached_mask_size == 0.0
-    env._cached_mask_size[masks_to_update] = env._cached_masks[masks_to_update].flatten(start_dim=1).sum(dim=1)
 
     masks_flattened = mask.flatten(start_dim=1)
 
