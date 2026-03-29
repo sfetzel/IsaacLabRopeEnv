@@ -13,6 +13,7 @@ from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import RewardTermCfg as RewTerm
+from isaaclab.managers import CurriculumTermCfg
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import TiledCamera, TiledCameraCfg, CameraCfg, Camera
 from isaaclab.managers import TerminationTermCfg as DoneTerm
@@ -141,7 +142,7 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
     )
 
     # unfortunately semantic filtering does not work per camera.
-    rope_semantic_camera: CameraCfg = CameraCfg(
+    """rope_semantic_camera: CameraCfg = CameraCfg(
         prim_path="/World/envs/env_.*/RopeCamera",
         offset=CameraCfg.OffsetCfg(pos=(1.2, 0.0, 1.0), rot=(-3.6920e-08, -3.8268e-01, -3.2020e-08,  9.2388e-01), convention="world"),
         data_types=["bounding_box_2d_loose_fast"],
@@ -152,19 +153,19 @@ class RopeknotSceneCfg(InteractiveSceneCfg):
         height=224,
         colorize_semantic_segmentation=False,
         semantic_filter="rope : capsule"
-    )
+    )"""
 
     contact_sensor_left = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/ee_link/left_gripper",
         update_period=0.0,
         debug_vis=True,
-        filter_prim_paths_expr=["{ENV_REGEX_NS}" + f"/Rope/Rope/capsule_{i}" for i in range(60)],
+        filter_prim_paths_expr=["{ENV_REGEX_NS}" + f"/Rope/Rope/capsule_{i}" for i in range(40)],
     )
     contact_sensor_right = ContactSensorCfg(
         prim_path="{ENV_REGEX_NS}/Robot/ee_link/right_gripper",
         update_period=0.0,
         debug_vis=True,
-        filter_prim_paths_expr=["{ENV_REGEX_NS}" + f"/Rope/Rope/capsule_{i}" for i in range(60)],
+        filter_prim_paths_expr=["{ENV_REGEX_NS}" + f"/Rope/Rope/capsule_{i}" for i in range(40)],
     )
 
 ##
@@ -342,10 +343,12 @@ class EventCfg:
         func=mdp.randomize_rope_joints,
         mode="reset",
         params={
-            "angle_min": 1.2,
-            "angle_max": 1.71,
+            "angle_min": 1.3,
+            "angle_max": 1.6,
             "capsule_subpath": "/capsule_.*",
-            "rope_path": "Rope/Rope"
+            "rope_path": "Rope/Rope",
+            "x_shift": 0.0,
+            "y_shift": 0.0,
         },
     )
 
@@ -361,15 +364,17 @@ class RewardsCfg:
     """Reward terms for the MDP."""
 
     # Reward for terminating early.
-    time_penalty = RewTerm(func=mdp.is_alive, weight=-0.1)
+    time_penalty = RewTerm(func=mdp.is_alive, weight=-0.5)
+    # reward for terminating
+    term_reward = RewTerm(func=mdp.is_terminated, weight=100.0)
 
-    model = RewTerm(func=mdp.model_reward, weight=1.0, params={
+    model = RewTerm(func=mdp.model_reward, weight=0.5, params={
         "camera_cfg": SceneEntityCfg("tiled_camera"),
     })
 
-    occlusion = RewTerm(func=mdp.occlusion_cam, weight=-0.5, params={
+    """occlusion = RewTerm(func=mdp.occlusion_cam, weight=-0.5, params={
         "camera_cfg": SceneEntityCfg("rope_semantic_camera")
-    })
+    })"""
 
     # a small reward so the robot approaches the rope.
     target_distance = RewTerm(func=mdp.ee_target_distance, weight=-0.01, params={
@@ -383,7 +388,7 @@ class RewardsCfg:
     })"""
 
     # discourage the robot from hiding the rope.
-    #mask_size = RewTerm(func=mdp.mask_size, weight=0.)
+    mask_size = RewTerm(func=mdp.mask_size, weight=0.05)
 
     """close_to_mask = RewTerm(func=mdp.close_to_mask, weight=1.0, params={
         "camera_cfg": SceneEntityCfg("tiled_camera"),
@@ -392,7 +397,7 @@ class RewardsCfg:
 
     left_gripper_contact = RewTerm(
         func=mdp.desired_contacts_filtered,  # returns 1.0 when no contact and 0.0 when contact
-        weight=-0.5,
+        weight=-1.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_sensor_left"),
             "threshold": 0
@@ -401,7 +406,7 @@ class RewardsCfg:
 
     right_gripper_contact = RewTerm(
         func=mdp.desired_contacts_filtered,
-        weight=-0.5,
+        weight=-1.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_sensor_right"),
             "threshold": 0
@@ -422,7 +427,7 @@ class RewardsCfg:
     # Penalty for change in actions (smoothness)
     action_control_glitch = RewTerm(
         func=mdp.action_rate_l2,
-        weight=-0.2,
+        weight=-1e-2,
         params={}
     )
 
@@ -440,6 +445,52 @@ class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     finished = DoneTerm(func=mdp.done)
 
+
+def override_value(env, env_ids, data, value, num_steps):
+    if env.common_step_counter > num_steps:
+        return value
+    return mdp.modify_term_cfg.NO_CHANGE
+
+
+@configclass
+class CurriculumCfg:
+
+    increase_rope_min_angle = CurriculumTermCfg(
+        func=mdp.modify_term_cfg,
+        params={
+            "address": "events.randomize_rope_joint_state.params.angle_min",
+            "modify_fn": override_value,
+            "modify_params": {"value": 1.0, "num_steps": 15000},
+        },
+    )
+
+    increase_rope_max_angle = CurriculumTermCfg(
+        func=mdp.modify_term_cfg,
+        params={
+            "address": "events.randomize_rope_joint_state.params.angle_max",
+            "modify_fn": override_value,
+            "modify_params": {"value": 1.8, "num_steps": 20000},
+        },
+    )
+
+    increase_rope_x_shift = CurriculumTermCfg(
+        func=mdp.modify_term_cfg,
+        params={
+            "address": "events.randomize_rope_joint_state.params.x_shift",
+            "modify_fn": override_value,
+            "modify_params": {"value": 0.05, "num_steps": 30000},
+        },
+    )
+
+    increase_rope_y_shift = CurriculumTermCfg(
+        func=mdp.modify_term_cfg,
+        params={
+            "address": "events.randomize_rope_joint_state.params.y_shift",
+            "modify_fn": override_value,
+            "modify_params": {"value": 0.05, "num_steps": 40000},
+        },
+    )
+
 ##
 # Environment configuration
 ##
@@ -452,7 +503,7 @@ import torch
 class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     # Scene settings
     scene: RopeknotSceneCfg = RopeknotSceneCfg(
-        num_envs=350, env_spacing=4.0,
+        num_envs=350, env_spacing=2.0,
     )
     # Basic settings
     observations: ObservationsCfg = ObservationsCfg()
@@ -461,7 +512,8 @@ class RopeknotEnvCfg(ManagerBasedRLEnvCfg):
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
-    
+    curriculum: CurriculumCfg = CurriculumCfg()
+
     # Post initialization
     def __post_init__(self) -> None:
         """Post initialization."""

@@ -27,8 +27,8 @@ def randomize_rope_joints(
     capsule_subpath: str,
     rope_path: str,
     capsule_distance: float = 0.02,
-    x_shift: float = 0.1,
-    y_shift: float = 0.1
+    x_shift: float = 0.0,
+    y_shift: float = 0.0
 ):
     """
     Randomizes the rope pose by modifying the "z" DOF rotation.

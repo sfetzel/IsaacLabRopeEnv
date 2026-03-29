@@ -103,7 +103,7 @@ def model_reward(env: ManagerBasedRLEnv, camera_cfg: SceneEntityCfg) -> torch.Te
             env._cached_mask_size[masks_to_update] = masks[masks_to_update].flatten(start_dim=1).float().sum(dim=1)
 
         if hasattr(env, "_last_masks"):
-            beta = 0.1
+            beta = 0.8  # 0.8 is a good choice
             masks = (1 - beta) * masks + beta * env._last_masks
         env._last_masks = masks
         rewards = reward_model(masks)
