@@ -101,6 +101,7 @@ import omni.ui as ui
 from isaaclab.devices import Se3Keyboard, Se3KeyboardCfg, Se3SpaceMouse, Se3SpaceMouseCfg
 from isaaclab.devices.openxr import remove_camera_configs
 from isaaclab.devices.teleop_device_factory import create_teleop_device
+from isaaclab.managers.recorder_manager import RecorderManagerBaseCfg, RecorderTerm, RecorderTermCfg
 
 import isaaclab_mimic.envs  # noqa: F401
 from isaaclab_mimic.ui.instruction_display import InstructionDisplay, show_subtask_instructions
@@ -115,6 +116,8 @@ from isaaclab.envs import DirectRLEnvCfg, ManagerBasedRLEnvCfg
 from isaaclab.envs.mdp.recorders.recorders_cfg import ActionStateRecorderManagerCfg
 from isaaclab.envs.ui import EmptyWindow
 from isaaclab.managers import DatasetExportMode
+from isaaclab.managers.recorder_manager import RecorderTerm
+from isaaclab.utils import configclass
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils.parse_cfg import parse_env_cfg
@@ -177,6 +180,20 @@ def setup_output_directories() -> tuple[str, str]:
     return output_dir, output_file_name
 
 
+class PreStepFlatDebugObservationsRecorder(RecorderTerm):
+    """Recorder term that records the policy group observations in each step."""
+
+    def record_pre_step(self):
+        return "obs", self._env.obs_buf["debug"]
+
+
+@configclass
+class PreStepFlatDebugObservationsRecorderCfg(RecorderTermCfg):
+    """Configuration for the step policy observation recorder term."""
+
+    class_type: type[RecorderTerm] = PreStepFlatDebugObservationsRecorder
+
+
 def create_environment_config(
     output_dir: str, output_file_name: str
 ) -> tuple[ManagerBasedRLEnvCfg | DirectRLEnvCfg, object | None]:
@@ -231,6 +248,7 @@ def create_environment_config(
     env_cfg.recorders.dataset_export_dir_path = output_dir
     env_cfg.recorders.dataset_filename = output_file_name
     env_cfg.recorders.dataset_export_mode = DatasetExportMode.EXPORT_SUCCEEDED_ONLY
+    env_cfg.recorders.record_pre_step_debug_observations = PreStepFlatDebugObservationsRecorderCfg()
 
     return env_cfg, success_term
 
